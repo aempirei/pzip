@@ -81,8 +81,8 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	for(int i = optind + 1; i <= argc; i++)
-		cfg.files.push_back(argv[optind]);
+	for(int i = optind; i < argc; i++)
+		cfg.files.push_back(argv[i]);
 
 	if(cfg.help) {
 		usage(*argv);
