@@ -12,7 +12,7 @@ OBJECTS = src/libpz.o
 all: $(TARGETS)
 
 clean:
-	rm -f src/*.o $(TARGETS)
+	rm -f test.txt test.txt.pz src/*.o $(TARGETS)
 	rm -rf bin lib
 
 install:
@@ -22,7 +22,7 @@ install:
 
 test: $(TARGETS)
 	cp README test.txt
-	pzip test.txt
+	./bin/pzip test.txt
 	sha256sum test.txt.pz
 
 library: lib/libpz.a
