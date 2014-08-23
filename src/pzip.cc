@@ -10,19 +10,26 @@
 #include <iomanip>
 #include <iostream>
 
+#include <cstring>
 #include <cstdlib>
 #include <cstdio>
 
 #include <string>
 #include <list>
 
+extern "C" {
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+}
 
 #include <pzip.hh>
 
 struct config;
 
 void usage(const char *);
+bool pz_process_file(const config&, const char *);
 
 struct config {
 
@@ -51,9 +58,38 @@ void usage(const char *prog) {
 		"\t-f\toverwrite existing output files" << std::endl <<
 		"\t-c\toutput to standard out" << std::endl <<
 		"\t-q\tsuppress output messages" << std::endl <<
-		"\t-v\tbe verbose" << std::endl <<
+		"\t-v\tbe verbose" << std::endl << std::endl <<
 
 		"If no file names are given, " << prog << " uses stdin/stdout." << std::endl << std::endl;
+}
+
+bool pz_process_file(const config& cfg, const char *filename) {
+
+	int fd;
+	struct stat sb;
+
+	std::cout << std::setw(12) << filename << ": ";
+
+	if(stat(filename, &sb) == -1) {
+		std::cout << strerror(errno) << std::endl;
+		return false;
+	}
+
+	if(S_ISDIR(sb.st_mode)) {
+		std::cout << "ignoring directory" << std::endl;
+		return false;
+	}
+
+	fd = open(filename, O_RDONLY);
+	if(fd == -1) {
+		std::cout << strerror(errno) << std::endl;
+		return false;
+	}
+
+	std::cout << std::endl;
+
+	close(fd);
+	return true;
 }
 
 int main(int argc, char **argv) {
@@ -76,8 +112,8 @@ int main(int argc, char **argv) {
 			case 'v': cfg.verbose    = true; break;
 
 			default:
-				std::cout << "Try `" << *argv << " -h' for more information." << std::endl;
-				return -1;
+				  std::cout << "Try `" << *argv << " -h' for more information." << std::endl;
+				  return -1;
 		}
 	}
 
@@ -89,8 +125,9 @@ int main(int argc, char **argv) {
 		return 0;
 	}
 
-	for(auto file : cfg.files)
-		std::cout << "handling file: " << file << std::endl;
+	for(auto file : cfg.files) {
+		pz_process_file(cfg, file.c_str());
+	}
 
 	return 0;
 }
