@@ -86,6 +86,10 @@ bool pz_process_file(const config& cfg, const char *filename) {
 		return false;
 	}
 
+	if(not cfg.compress and not cfg.decompress) {
+		// check filename for .pz extension.
+	}
+
 	std::cout << std::endl;
 
 	close(fd);
