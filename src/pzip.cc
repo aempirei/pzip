@@ -88,7 +88,8 @@ const char *get_file_type(const struct stat& sb) {
 	return iter->second;
 }
 
-bool pz_process_fd(const config& cfg, int fdin, int fdout) {
+bool pz_process_fd(const config&, int, int) {
+	return true;
 }
 
 bool pz_process_file(const config& cfg, const char *filenamein) {
@@ -168,7 +169,8 @@ bool pz_process_file(const config& cfg, const char *filenamein) {
 	fdin = open(filenamein, O_RDONLY);
 	if(fdin == -1) {
 		std::cout << strerror(errno) << std::endl;
-		close(fdout);
+		if(fdout != STDOUT_FILENO)
+			close(fdout);
 		return false;
 	}
 
@@ -177,7 +179,8 @@ bool pz_process_file(const config& cfg, const char *filenamein) {
 	std::cout << std::endl;
 
 	close(fdin);
-	close(fdout);
+	if(fdout != STDOUT_FILENO)
+		close(fdout);
 
 	return true;
 }
