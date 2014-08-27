@@ -54,7 +54,7 @@ struct config {
 
 void usage(const char *prog) {
 
-	std::cout << prog << " file compressor." << std::endl << std::endl <<
+	std::cerr << prog << " file compressor." << std::endl << std::endl <<
 
 		"usage: " << prog << " [{option|file}]..." << std::endl << std::endl <<
 
@@ -98,15 +98,15 @@ bool pz_process_file(const config& cfg, const char *filenamein) {
 	int fdout;
 	struct stat sb;
 
-	std::cout << std::setw(12) << filenamein << ": ";
+	std::cerr << std::setw(12) << filenamein << ": ";
 
 	if(lstat(filenamein, &sb) == -1) {
-		std::cout << strerror(errno) << std::endl;
+		std::cerr << strerror(errno) << std::endl;
 		return false;
 	}
 
 	if(S_ISDIR(sb.st_mode)) {
-		std::cout << "ignoring directory" << std::endl;
+		std::cerr << "ignoring directory" << std::endl;
 		return false;
 	}
 
@@ -124,7 +124,7 @@ bool pz_process_file(const config& cfg, const char *filenamein) {
 		// then only compress regular files
 
 		if(not S_ISREG(sb.st_mode)) {
-			std::cout << "ignoring " << get_file_type(sb) << std::endl;
+			std::cerr << "ignoring " << get_file_type(sb) << std::endl;
 			return false;
 		}
 
@@ -144,31 +144,31 @@ bool pz_process_file(const config& cfg, const char *filenamein) {
 
 		if(strcmp(p, pz_extension) == 0) {
 			if(cfg.compress) {
-				std::cout << "already has " << pz_extension << " suffix -- ignored" << std::endl;
+				std::cerr << "already has " << pz_extension << " suffix -- ignored" << std::endl;
 				return false;
 			}
 			filenameout.erase(filenameout.end() - extension_sz, filenameout.end());
 		} else {
 			if(not cfg.compress) {
-				std::cout << "unknown suffix -- ignored" << std::endl;
+				std::cerr << "unknown suffix -- ignored" << std::endl;
 				return false;
 
 			}
 			filenameout += pz_extension;
 		}
 
-		std::cout << "=> " << filenameout;
+		std::cerr << "=> " << filenameout;
 
 		fdout = open(filenameout.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0664);
 		if(fdout == -1) {
-			std::cout << strerror(errno) << std::endl;
+			std::cerr << strerror(errno) << std::endl;
 			return false;
 		}
 	}
 
 	fdin = open(filenamein, O_RDONLY);
 	if(fdin == -1) {
-		std::cout << strerror(errno) << std::endl;
+		std::cerr << strerror(errno) << std::endl;
 		if(fdout != STDOUT_FILENO)
 			close(fdout);
 		return false;
@@ -176,7 +176,7 @@ bool pz_process_file(const config& cfg, const char *filenamein) {
 
 	pz_process_fd(cfg, fdin, fdout);
 
-	std::cout << std::endl;
+	std::cerr << std::endl;
 
 	close(fdin);
 	if(fdout != STDOUT_FILENO)
@@ -205,7 +205,7 @@ int main(int argc, char **argv) {
 			case 'v': cfg.verbose   = true  ; break;
 
 			default:
-				  std::cout << "Try `" << *argv << " -h' for more information." << std::endl;
+				  std::cerr << "Try `" << *argv << " -h' for more information." << std::endl;
 				  return -1;
 		}
 	}
