@@ -24,7 +24,7 @@ extern "C" {
 #include <fcntl.h>
 }
 
-#include <pzip.hh>
+#include <libpz.hh>
 
 struct config;
 
