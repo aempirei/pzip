@@ -16,7 +16,9 @@
 
 #include <string>
 #include <list>
+#include <vector>
 #include <map>
+#include <algorithm>
 
 extern "C" {
 #include <unistd.h>
@@ -88,10 +90,49 @@ const char *get_file_type(const struct stat& sb) {
 	return iter->second;
 }
 
+using histogram = std::map<std::vector<int>,int>;
+using dictionary = std::map<int,std::vector<int>>;
+
 bool pz_process_fd(const config& cfg, int fdin, int fdout) {
 
-	// load fdin into int list
-	// tally histogram
+	std::list<int> block;
+
+	unsigned char buf[1024];
+	int n;
+
+	do {
+		n = read(fdin, buf, sizeof(buf));
+		if(n == -1) {
+			if(errno == EAGAIN)
+				continue;
+			std::cerr << strerror(errno) << std::endl;
+			return false;
+		}
+
+		for(int i = 0; i < n; i++)
+			block.push_back((int)buf[i]);
+
+	} while(n != 0);
+
+	histogram h;
+
+	for(auto iter = block.begin(); next(iter) != block.end(); iter++) {
+		std::vector<int> key;
+		key.push_back(*iter);
+		key.push_back(*next(iter));
+		h[key]++;
+	}
+
+	auto iter = std::max_element(h.begin(), h.end(),
+			[](histogram::value_type a, histogram::value_type b) -> bool { return b.second > a.second; });
+
+	int next_symbol = 256;
+
+	dictionary d;
+
+	if(iter->second > 1)
+		d[next_symbol++] = iter->first;
+
 	// assign top nodes to dictionary
 	// compress
 	
