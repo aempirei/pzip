@@ -88,7 +88,13 @@ const char *get_file_type(const struct stat& sb) {
 	return iter->second;
 }
 
-bool pz_process_fd(const config&, int, int) {
+bool pz_process_fd(const config& cfg, int fdin, int fdout) {
+
+	// load fdin into int list
+	// tally histogram
+	// assign top nodes to dictionary
+	// compress
+	
 	return true;
 }
 
