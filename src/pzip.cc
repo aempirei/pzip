@@ -234,8 +234,8 @@ bool pz_process_fd(const config&, int fdin, int) {
 
 	symbol current_symbol = symbol::first;
 
-	 const sequence& current_sequence = sequence({symbol(58),symbol::wildcard,symbol(97)});
-	//const sequence& current_sequence = iter->first;
+	// const sequence& current_sequence = sequence({symbol(58),symbol::wildcard,symbol(97)});
+	const sequence& current_sequence = iter->first;
 
 	dictionary d;
 
