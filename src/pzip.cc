@@ -1,11 +1,14 @@
-// 
-// pzip
-// file compression tool
-//
-// Copyright(c) 2014 256 LLC
-// Written by Christopher Abad
-// 20 GOTO 10 
-//
+/////////////////////////////////
+//                             //
+// pzip                        //
+// file compression tool       //
+//                             //
+// Copyright(c) 2014 256 LLC   //
+// Written by Christopher Abad //
+// aempirei@256.bz             //
+// 20 GOTO 10                  //
+//                             //
+/////////////////////////////////
 
 #include <iomanip>
 #include <iostream>
@@ -15,6 +18,7 @@
 #include <cstdio>
 
 #include <string>
+#include <iterator>
 #include <list>
 #include <vector>
 #include <map>
@@ -30,6 +34,20 @@ extern "C" {
 #include <libpz.hh>
 
 struct config;
+struct symbol;
+
+template <typename T> using meta = std::pair<bool,T>;
+
+struct symbol {
+	using type = int;
+	const static type wildcard = -1;
+};
+
+using sequence = std::vector<symbol::type>;
+using histogram = std::map<sequence,long>;
+using dictionary = std::map<symbol::type,sequence>;
+
+const char *pz_extension = ".pz";
 
 void usage(const char *);
 
@@ -39,7 +57,10 @@ bool pz_process_fd(const config&, int, int);
 bool pz_compress(const config&, int, int);
 bool pz_decompress(const config&, int, int);
 
-const char *pz_extension = ".pz";
+bool pz_match_symbol(const symbol::type, const symbol::type);
+
+template <class T> T pz_match_sequence(typename T::const_iterator, typename T::const_iterator, const sequence&);
+template <class T> T pz_find_sequence(const T&, const sequence&, const typename T::const_iterator);
 
 struct config {
 
@@ -83,19 +104,44 @@ const static std::map<unsigned int, const char *> file_type = {
 };
 
 const char *get_file_type(const struct stat& sb) {
+
 	unsigned int mode = sb.st_mode &  S_IFMT;
 	auto iter = file_type.find(mode);
+
 	if(iter == file_type.end())
 		return "unknown";
+
 	return iter->second;
 }
 
-using histogram = std::map<std::vector<int>,int>;
-using dictionary = std::map<int,std::vector<int>>;
+bool pz_match_symbol(const symbol::type a, const symbol::type b) {
+	return a == b or a == symbol::wildcard or b == symbol::wildcard;
+}
 
-bool pz_process_fd(const config& cfg, int fdin, int fdout) {
+template <class T> T pz_match_sequence(typename T::const_iterator start, typename T::const_iterator end, const sequence& seq) {
 
-	std::list<int> block;
+	auto iter = seq.begin();
+	auto jter = start;
+
+	while(iter != seq.end())
+		if(jter == end or not pz_match_symbol(*iter++, *jter++))
+			return end;
+	
+	return start;
+}
+
+template <class T> T pz_find_sequence(const T& block, const sequence& seq, const typename T::const_iterator start = block.begin()) {
+
+	for(auto iter = start; iter != block.end(); iter++)
+		if(pz_match_sequence(iter, block.end(), seq))
+			return iter;
+
+	return block.end();
+}
+
+bool pz_process_fd(const config&, int fdin, int fdout) {
+
+	std::list<symbol::type> block;
 
 	unsigned char buf[1024];
 	int n;
@@ -110,31 +156,48 @@ bool pz_process_fd(const config& cfg, int fdin, int fdout) {
 		}
 
 		for(int i = 0; i < n; i++)
-			block.push_back((int)buf[i]);
+			block.push_back((symbol::type)buf[i]);
 
 	} while(n != 0);
 
 	histogram h;
 
 	for(auto iter = block.begin(); next(iter) != block.end(); iter++) {
-		std::vector<int> key;
+
+		sequence key;
+
 		key.push_back(*iter);
 		key.push_back(*next(iter));
+
 		h[key]++;
 	}
 
-	auto iter = std::max_element(h.begin(), h.end(),
-			[](histogram::value_type a, histogram::value_type b) -> bool { return b.second > a.second; });
+	auto iter = std::max_element(
+		h.begin(),
+		h.end(),
+		[] (histogram::value_type a, histogram::value_type b) -> bool { return b.second > a.second; }
+	);
 
-	int next_symbol = 256;
+	int current_symbol = 256;
+
+	const sequence& current_sequence = iter->first;
 
 	dictionary d;
 
 	if(iter->second > 1)
-		d[next_symbol++] = iter->first;
+		d[current_symbol] = current_sequence;
+	else
+		throw std::runtime_error("nothing to compress");
 
-	// assign top nodes to dictionary
 	// compress
+
+	auto position = pz_find_sequence(block.begin(), block.end(), current_sequence);
+
+	if(position != block.end()) {
+		std::cerr << "found sequence at position " << std::distance(block.begin(), position) << std::endl;
+	}
+
+	current_symbol++;
 	
 	return true;
 }
