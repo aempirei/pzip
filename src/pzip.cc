@@ -191,21 +191,41 @@ bool pz_process_fd(const config&, int fdin, int) {
 
 	dictionary d;
 
-	if(iter->second > 1)
+	if(iter->second > 1) {
 		d[current_symbol] = current_sequence;
-	else
+		std::cerr << "most frequently occurring sequence was seen " << iter->second << " times." << std::endl;
+	} else {
 		throw std::runtime_error("nothing to compress");
+	}
 
 	// compress
 
-	auto position = pz_find_sequence(block.begin(), block.end(), current_sequence);
+	auto position = block.begin();
 
-	if(position != block.end()) {
-		std::cerr << "found sequence at position " << std::distance(block.begin(), position) << std::endl;
+	while(position != block.end()) {
+
+		auto result = pz_find_sequence(position, block.end(), current_sequence);
+
+		if(result == block.end())
+			break;
+
+		std::cerr << " : found sequence at position " << std::distance(block.begin(), result) << " (";
+		for(auto iter = current_sequence.begin(); iter != current_sequence.end(); iter++) {
+			std::cerr << ' ' << (int)*iter;
+		}
+		std::cerr << " ) ~= (";
+		auto iter = result;
+		for(size_t i = 0; i < current_sequence.size(); i++) {
+			std::cerr << ' ' << (int)*iter++;
+		}
+
+		std::cerr << " )" << std::endl;
+
+		position = std::next(result);
 	}
 
 	current_symbol += 1;
-	
+
 	return true;
 }
 
