@@ -18,6 +18,7 @@
 #include <cstdio>
 
 #include <string>
+#include <sstream>
 #include <iterator>
 #include <list>
 #include <vector>
@@ -34,22 +35,19 @@ extern "C" {
 #include <libpz.hh>
 
 struct config;
+struct sequence;
 
-enum struct symbol : int {
-	wildcard = -1,
-	first = 256
+enum struct symbol;
+
+symbol operator+(const symbol&, int);
+symbol& operator+=(symbol&, int);
+
+using _sequence = std::vector<symbol>;
+struct sequence : _sequence {
+	using _sequence::_sequence;
+	explicit operator std::string() const;
 };
 
-symbol operator+(const symbol& x, int y) {
-	return symbol((int)x + y);
-}
-
-symbol& operator+=(symbol& x, int y) {
-	x = x + y;
-	return x;
-}
-
-using sequence = std::vector<symbol>;
 using histogram = std::map<sequence,long>;
 using dictionary = std::map<symbol,sequence>;
 
@@ -81,6 +79,30 @@ struct config {
 
 	std::list<std::string> files;
 };
+
+enum struct symbol : int {
+	wildcard = -1,
+	first = 256
+};
+
+symbol operator+(const symbol& x, int y) {
+	return symbol((int)x + y);
+}
+
+symbol& operator+=(symbol& x, int y) {
+	x = x + y;
+	return x;
+}
+
+sequence::operator std::string() const {
+	std::stringstream ss;
+	auto iter = begin();
+	if(iter != end())
+		ss << (int)(*iter++);
+	while(iter != end())
+		ss << ' ' << (int)(*iter++);
+	return ss.str();
+}
 
 void usage(const char *prog) {
 
@@ -193,7 +215,7 @@ bool pz_process_fd(const config&, int fdin, int) {
 
 	if(iter->second > 1) {
 		d[current_symbol] = current_sequence;
-		std::cerr << "most frequently occurring sequence was seen " << iter->second << " times." << std::endl;
+		std::cerr << " : most frequent sequence is " << (std::string)current_sequence << " # " << iter->second << std::endl;
 	} else {
 		throw std::runtime_error("nothing to compress");
 	}
@@ -210,15 +232,9 @@ bool pz_process_fd(const config&, int fdin, int) {
 			break;
 
 		std::cerr << " : found sequence at position " << std::distance(block.begin(), result) << " (";
-		for(auto iter = current_sequence.begin(); iter != current_sequence.end(); iter++) {
-			std::cerr << ' ' << (int)*iter;
-		}
-		std::cerr << " ) ~= (";
 		auto iter = result;
-		for(size_t i = 0; i < current_sequence.size(); i++) {
+		for(size_t i = 0; i < current_sequence.size(); i++)
 			std::cerr << ' ' << (int)*iter++;
-		}
-
 		std::cerr << " )" << std::endl;
 
 		position = std::next(result);
