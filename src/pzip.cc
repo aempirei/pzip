@@ -270,6 +270,8 @@ bool pz_process_fd(const config&, int fdin, int) {
 
 		position = pz_erase_sequence(b, result, current_sequence);
 
+		position = b.insert(position, current_symbol);
+
 		if(position == jter) {
 			std::cerr << " $";
 		} else {
