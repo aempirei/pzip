@@ -34,18 +34,24 @@ extern "C" {
 #include <libpz.hh>
 
 struct config;
-struct symbol;
 
-template <typename T> using meta = std::pair<bool,T>;
-
-struct symbol {
-	using type = int;
-	const static type wildcard = -1;
+enum struct symbol : int {
+	wildcard = -1,
+	first = 256
 };
 
-using sequence = std::vector<symbol::type>;
+symbol operator+(const symbol& x, int y) {
+	return symbol((int)x + y);
+}
+
+symbol& operator+=(symbol& x, int y) {
+	x = x + y;
+	return x;
+}
+
+using sequence = std::vector<symbol>;
 using histogram = std::map<sequence,long>;
-using dictionary = std::map<symbol::type,sequence>;
+using dictionary = std::map<symbol,sequence>;
 
 const char *pz_extension = ".pz";
 
@@ -57,10 +63,11 @@ bool pz_process_fd(const config&, int, int);
 bool pz_compress(const config&, int, int);
 bool pz_decompress(const config&, int, int);
 
-bool pz_match_symbol(const symbol::type, const symbol::type);
+bool pz_compare_symbols(const symbol, const symbol);
 
-template <class T> T pz_match_sequence(typename T::const_iterator, typename T::const_iterator, const sequence&);
-template <class T> T pz_find_sequence(const T&, const sequence&, const typename T::const_iterator);
+template <typename T> bool pz_match_sequence(T, T, const sequence&);
+
+template <typename T> T pz_find_sequence(T, T, const sequence&);
 
 struct config {
 
@@ -114,34 +121,34 @@ const char *get_file_type(const struct stat& sb) {
 	return iter->second;
 }
 
-bool pz_match_symbol(const symbol::type a, const symbol::type b) {
+bool pz_compare_symbols(const symbol a, const symbol b) {
 	return a == b or a == symbol::wildcard or b == symbol::wildcard;
 }
 
-template <class T> T pz_match_sequence(typename T::const_iterator start, typename T::const_iterator end, const sequence& seq) {
+template <class T> bool pz_match_sequence(T begin, T end, const sequence& s) {
 
-	auto iter = seq.begin();
-	auto jter = start;
+	auto ster = s.begin();
+	auto bter = begin;
 
-	while(iter != seq.end())
-		if(jter == end or not pz_match_symbol(*iter++, *jter++))
-			return end;
+	while(ster != s.end())
+		if(bter == end or not pz_compare_symbols(*ster++, *bter++))
+			return false;
 	
-	return start;
+	return true;
 }
 
-template <class T> T pz_find_sequence(const T& block, const sequence& seq, const typename T::const_iterator start = block.begin()) {
+template <class T> T pz_find_sequence(T begin, T end, const sequence& s) {
 
-	for(auto iter = start; iter != block.end(); iter++)
-		if(pz_match_sequence(iter, block.end(), seq))
-			return iter;
+	for(auto position = begin; position != end; position++)
+		if(pz_match_sequence(position, end, s))
+			return position;
 
-	return block.end();
+	return end;
 }
 
-bool pz_process_fd(const config&, int fdin, int fdout) {
+bool pz_process_fd(const config&, int fdin, int) {
 
-	std::list<symbol::type> block;
+	std::list<symbol> block;
 
 	unsigned char buf[1024];
 	int n;
@@ -156,7 +163,7 @@ bool pz_process_fd(const config&, int fdin, int fdout) {
 		}
 
 		for(int i = 0; i < n; i++)
-			block.push_back((symbol::type)buf[i]);
+			block.push_back((symbol)buf[i]);
 
 	} while(n != 0);
 
@@ -178,7 +185,7 @@ bool pz_process_fd(const config&, int fdin, int fdout) {
 		[] (histogram::value_type a, histogram::value_type b) -> bool { return b.second > a.second; }
 	);
 
-	int current_symbol = 256;
+	symbol current_symbol = symbol::first;
 
 	const sequence& current_sequence = iter->first;
 
@@ -197,7 +204,7 @@ bool pz_process_fd(const config&, int fdin, int fdout) {
 		std::cerr << "found sequence at position " << std::distance(block.begin(), position) << std::endl;
 	}
 
-	current_symbol++;
+	current_symbol += 1;
 	
 	return true;
 }
