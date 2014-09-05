@@ -1,0 +1,4 @@
+*.pz
+src/*.o
+bin
+lib
