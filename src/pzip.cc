@@ -36,6 +36,7 @@ extern "C" {
 
 struct config;
 struct sequence;
+struct pz;
 
 enum struct symbol;
 
@@ -50,6 +51,7 @@ struct sequence : _sequence {
 
 using histogram = std::map<sequence,long>;
 using dictionary = std::map<symbol,sequence>;
+using block = std::list<symbol>;
 
 const char *pz_extension = ".pz";
 
@@ -64,8 +66,8 @@ bool pz_decompress(const config&, int, int);
 bool pz_compare_symbols(const symbol, const symbol);
 
 template <typename T> bool pz_match_sequence(T, T, const sequence&);
-
 template <typename T> T pz_find_sequence(T, T, const sequence&);
+template <typename T> typename T::iterator pz_erase_sequence(T&, typename T::iterator, const sequence&);
 
 struct config {
 
@@ -168,9 +170,32 @@ template <class T> T pz_find_sequence(T begin, T end, const sequence& s) {
 	return end;
 }
 
+template <typename T> typename T::iterator pz_erase_sequence(T& b, typename T::iterator pos, const sequence& s) {
+
+	auto bter = pos--;
+	
+	for(auto ster = s.begin(); ster != s.end(); ster++) {
+
+		if(bter == b.end())
+			throw std::runtime_error("pz_erase_sequence(): unexpectedly read past last element in object");
+		
+		auto cter = bter++;
+
+		if(*ster == symbol::wildcard) {
+			// do nothing
+		} else if(*cter == *ster) {
+			b.erase(cter);
+		} else {
+			throw std::runtime_error("pz_erase_sequence(): unexpectedly read past last element in object");
+		}
+	}
+
+	return ++pos;
+}
+
 bool pz_process_fd(const config&, int fdin, int) {
 
-	std::list<symbol> block;
+	block b;
 
 	unsigned char buf[1024];
 	int n;
@@ -185,13 +210,13 @@ bool pz_process_fd(const config&, int fdin, int) {
 		}
 
 		for(int i = 0; i < n; i++)
-			block.push_back((symbol)buf[i]);
+			b.push_back((symbol)buf[i]);
 
 	} while(n != 0);
 
 	histogram h;
 
-	for(auto iter = block.begin(); next(iter) != block.end(); iter++) {
+	for(auto iter = b.begin(); next(iter) != b.end(); iter++) {
 
 		sequence key;
 
@@ -209,7 +234,8 @@ bool pz_process_fd(const config&, int fdin, int) {
 
 	symbol current_symbol = symbol::first;
 
-	const sequence& current_sequence = iter->first;
+	 const sequence& current_sequence = sequence({symbol(58),symbol::wildcard,symbol(97)});
+	//const sequence& current_sequence = iter->first;
 
 	dictionary d;
 
@@ -222,22 +248,36 @@ bool pz_process_fd(const config&, int fdin, int) {
 
 	// compress
 
-	auto position = block.begin();
+	auto position = b.begin();
 
-	while(position != block.end()) {
+	while(position != b.end()) {
 
-		auto result = pz_find_sequence(position, block.end(), current_sequence);
+		auto result = pz_find_sequence(position, b.end(), current_sequence);
 
-		if(result == block.end())
+		if(result == b.end())
 			break;
 
-		std::cerr << " : found sequence at position " << std::distance(block.begin(), result) << " (";
-		auto iter = result;
-		for(size_t i = 0; i < current_sequence.size(); i++)
-			std::cerr << ' ' << (int)*iter++;
-		std::cerr << " )" << std::endl;
+		std::cerr << " : found sequence at position " << std::distance(b.begin(), result) << " (";
 
-		position = std::next(result);
+		auto jter = result;
+
+		std::advance(jter, current_sequence.size());
+
+		for(auto iter = result; iter != jter; iter++)
+			std::cerr << ' ' << (int)*iter;
+
+		std::cerr << " ->";
+
+		position = pz_erase_sequence(b, result, current_sequence);
+
+		if(position == jter) {
+			std::cerr << " $";
+		} else {
+			for(auto iter = position; iter != jter; iter++)
+				std::cerr << ' ' << (int)*iter;
+		}
+
+		std::cerr << " )" << std::endl;
 	}
 
 	current_symbol += 1;
