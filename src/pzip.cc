@@ -52,6 +52,7 @@ struct sequence : _sequence {
 using histogram = std::map<sequence,long>;
 using dictionary = std::map<symbol,sequence>;
 using block = std::list<symbol>;
+template <typename T> using meta = std::pair<bool, T>;
 
 const char *pz_extension = ".pz";
 
@@ -70,8 +71,9 @@ template <typename T> T pz_find_sequence(T, T, const sequence&);
 template <typename T> typename T::iterator pz_erase_sequence(T&, typename T::iterator, const sequence&);
 template <typename T> typename T::iterator pz_replace_next_sequence(T&, typename T::iterator, const sequence&, symbol);
 template <typename T> int pz_replace_sequence(T&, const sequence&, symbol);
+template <typename T> histogram pz_get_histogram(const T&, size_t gap);
+meta<block> pz_get_block(int);
 
-template <typename T> histogram pz_get_histogram(const T&);
 
 struct config {
 
@@ -221,27 +223,7 @@ template <typename T> int pz_replace_sequence(T& b, const sequence& s, symbol x)
 	return n;
 }
 
-
-bool pz_process_fd(const config&, int fdin, int) {
-
-	block b;
-
-	unsigned char buf[1024];
-	int n;
-
-	do {
-		n = read(fdin, buf, sizeof(buf));
-		if(n == -1) {
-			if(errno == EAGAIN)
-				continue;
-			std::cerr << strerror(errno) << std::endl;
-			return false;
-		}
-
-		for(int i = 0; i < n; i++)
-			b.push_back((symbol)buf[i]);
-
-	} while(n != 0);
+template <typename T> histogram pz_get_histogram(const T& b, size_t /* gap */) {
 
 	histogram h;
 
@@ -254,6 +236,44 @@ bool pz_process_fd(const config&, int fdin, int) {
 
 		h[key]++;
 	}
+
+	return h;
+}
+
+meta<block> pz_get_block(int fd) {
+	block b;
+
+	unsigned char buf[1024];
+	int n;
+
+	do {
+		n = read(fd, buf, sizeof(buf));
+		if(n == -1) {
+			if(errno == EAGAIN)
+				continue;
+			return meta<block>(false,block());
+		}
+
+		for(int i = 0; i < n; i++)
+			b.push_back((symbol)buf[i]);
+
+	} while(n != 0);
+
+	return meta<block>(true,b);
+}
+
+bool pz_process_fd(const config&, int fdin, int) {
+
+	meta<block> mb = pz_get_block(fdin);
+
+	if(!mb.first) {
+		std::cerr << strerror(errno) << std::endl;
+		return false;
+	}
+
+	block b = mb.second;
+
+	histogram h = pz_get_histogram(b, 0);
 
 	auto iter = std::max_element(
 		h.begin(),
