@@ -63,11 +63,15 @@ bool pz_process_fd(const config&, int, int);
 bool pz_compress(const config&, int, int);
 bool pz_decompress(const config&, int, int);
 
-bool pz_compare_symbols(const symbol, const symbol);
+bool pz_compare_symbols(symbol, symbol);
 
 template <typename T> bool pz_match_sequence(T, T, const sequence&);
 template <typename T> T pz_find_sequence(T, T, const sequence&);
 template <typename T> typename T::iterator pz_erase_sequence(T&, typename T::iterator, const sequence&);
+template <typename T> typename T::iterator pz_replace_next_sequence(T&, typename T::iterator, const sequence&, symbol);
+template <typename T> int pz_replace_sequence(T&, const sequence&, symbol);
+
+template <typename T> histogram pz_get_histogram(const T&);
 
 struct config {
 
@@ -145,7 +149,7 @@ const char *get_file_type(const struct stat& sb) {
 	return iter->second;
 }
 
-bool pz_compare_symbols(const symbol a, const symbol b) {
+bool pz_compare_symbols(symbol a, symbol b) {
 	return a == b or a == symbol::wildcard or b == symbol::wildcard;
 }
 
@@ -192,6 +196,31 @@ template <typename T> typename T::iterator pz_erase_sequence(T& b, typename T::i
 
 	return ++pos;
 }
+
+template <typename T> typename T::iterator pz_replace_next_sequence(T& b, typename T::iterator pos, const sequence& s, symbol x) {
+
+	pos = pz_find_sequence(pos, b.end(), s);
+
+	if(pos != b.end()) {
+		pos = pz_erase_sequence(b, pos, s);
+		pos = b.insert(pos, x);
+	}
+
+	return pos;
+}
+
+template <typename T> int pz_replace_sequence(T& b, const sequence& s, symbol x) {
+
+	int n = 0;
+
+	auto position = b.begin();
+
+	while((position = pz_replace_next_sequence(b, position, s, x)) != b.end())
+		n++;
+
+	return n;
+}
+
 
 bool pz_process_fd(const config&, int fdin, int) {
 
@@ -241,46 +270,18 @@ bool pz_process_fd(const config&, int fdin, int) {
 
 	if(iter->second > 1) {
 		d[current_symbol] = current_sequence;
-		std::cerr << " : most frequent sequence is " << (std::string)current_sequence << " # " << iter->second << std::endl;
 	} else {
 		throw std::runtime_error("nothing to compress");
 	}
 
 	// compress
 
-	auto position = b.begin();
+	std::cerr << std::endl;
 
-	while(position != b.end()) {
+	int replacements = pz_replace_sequence(b, current_sequence, current_symbol);
 
-		auto result = pz_find_sequence(position, b.end(), current_sequence);
-
-		if(result == b.end())
-			break;
-
-		std::cerr << " : found sequence at position " << std::distance(b.begin(), result) << " (";
-
-		auto jter = result;
-
-		std::advance(jter, current_sequence.size());
-
-		for(auto iter = result; iter != jter; iter++)
-			std::cerr << ' ' << (int)*iter;
-
-		std::cerr << " ->";
-
-		position = pz_erase_sequence(b, result, current_sequence);
-
-		position = b.insert(position, current_symbol);
-
-		if(position == jter) {
-			std::cerr << " $";
-		} else {
-			for(auto iter = position; iter != jter; iter++)
-				std::cerr << ' ' << (int)*iter;
-		}
-
-		std::cerr << " )" << std::endl;
-	}
+	std::cerr << "replaced " << replacements << " instances of " << (std::string)current_sequence;
+	std::cerr << " with symbol " << (int)current_symbol << std::endl;
 
 	current_symbol += 1;
 
