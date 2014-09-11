@@ -71,7 +71,8 @@ template <typename T> T pz_find_sequence(T, T, const sequence&);
 template <typename T> typename T::iterator pz_erase_sequence(T&, typename T::iterator, const sequence&);
 template <typename T> typename T::iterator pz_replace_next_sequence(T&, typename T::iterator, const sequence&, symbol);
 template <typename T> int pz_replace_sequence(T&, const sequence&, symbol);
-template <typename T> histogram pz_get_histogram(const T&, size_t gap);
+template <typename T> histogram pz_get_histogram(const T&, size_t);
+histogram::iterator pz_get_best_sequence(histogram&);
 meta<block> pz_get_block(int);
 
 
@@ -240,6 +241,17 @@ template <typename T> histogram pz_get_histogram(const T& b, size_t /* gap */) {
 	return h;
 }
 
+histogram::iterator pz_get_best_sequence(histogram& h) {
+
+	auto iter = std::max_element(
+		h.begin(),
+		h.end(),
+		[] (histogram::value_type a, histogram::value_type b) -> bool { return b.second > a.second; }
+	);
+	
+	return ( iter->second > 1 ) ? iter : h.end();
+}
+
 meta<block> pz_get_block(int fd) {
 	block b;
 
@@ -264,6 +276,10 @@ meta<block> pz_get_block(int fd) {
 
 bool pz_process_fd(const config&, int fdin, int) {
 
+	dictionary d;
+
+	symbol current_symbol = symbol::first;
+
 	meta<block> mb = pz_get_block(fdin);
 
 	if(!mb.first) {
@@ -275,24 +291,15 @@ bool pz_process_fd(const config&, int fdin, int) {
 
 	histogram h = pz_get_histogram(b, 0);
 
-	auto iter = std::max_element(
-		h.begin(),
-		h.end(),
-		[] (histogram::value_type a, histogram::value_type b) -> bool { return b.second > a.second; }
-	);
+	auto best = pz_get_best_sequence(h);
 
-	symbol current_symbol = symbol::first;
+	if(best == h.end())
+		throw std::runtime_error("nothing to compress");
 
 	// const sequence& current_sequence = sequence({symbol(58),symbol::wildcard,symbol(97)});
-	const sequence& current_sequence = iter->first;
 
-	dictionary d;
-
-	if(iter->second > 1) {
-		d[current_symbol] = current_sequence;
-	} else {
-		throw std::runtime_error("nothing to compress");
-	}
+	const sequence& current_sequence = best->first;
+	d[current_symbol] = current_sequence;
 
 	// compress
 
