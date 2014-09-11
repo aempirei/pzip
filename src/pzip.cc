@@ -248,8 +248,8 @@ histogram::iterator pz_get_best_sequence(histogram& h) {
 		h.end(),
 		[] (histogram::value_type a, histogram::value_type b) -> bool { return b.second > a.second; }
 	);
-	
-	return ( iter->second > 1 ) ? iter : h.end();
+
+	return ( iter != h.end() and iter->second > 1 ) ? iter : h.end();
 }
 
 meta<block> pz_get_block(int fd) {
@@ -289,28 +289,58 @@ bool pz_process_fd(const config&, int fdin, int) {
 
 	block b = mb.second;
 
+	std::cerr << b.size() << " bytes" << std::endl;
+
 	histogram h = pz_get_histogram(b, 0);
 
 	auto best = pz_get_best_sequence(h);
+	long best_sz = best->second;
 
-	if(best == h.end())
-		throw std::runtime_error("nothing to compress");
+	for(;;) {
 
-	// const sequence& current_sequence = sequence({symbol(58),symbol::wildcard,symbol(97)});
+		best = pz_get_best_sequence(h);
 
-	const sequence& current_sequence = best->first;
-	d[current_symbol] = current_sequence;
+		if(best == h.end() or best->second * 4 < best_sz) {
 
-	// compress
+			h = pz_get_histogram(b, 0);
 
-	std::cerr << std::endl;
+			best = pz_get_best_sequence(h);
 
-	int replacements = pz_replace_sequence(b, current_sequence, current_symbol);
+			if(best == h.end())
+				throw std::runtime_error("nothing to compress");
 
-	std::cerr << "replaced " << replacements << " instances of " << (std::string)current_sequence;
-	std::cerr << " with symbol " << (int)current_symbol << std::endl;
+			best_sz = best->second;
+		}
 
-	current_symbol += 1;
+		// const sequence& best_sequence = sequence({symbol(58),symbol::wildcard,symbol(97)});
+
+		const sequence& best_sequence = best->first;
+		d[current_symbol] = best_sequence;
+
+		// compress
+
+		int replacements = pz_replace_sequence(b, best_sequence, current_symbol);
+
+		std::cerr << "replaced " << replacements << " instances of " << (std::string)best_sequence;
+		std::cerr << " with symbol " << (int)current_symbol << " : " << b.size() << " bytes" << std::endl;
+
+		current_symbol += 1;
+
+		h.erase(best);
+
+		for(auto iter = h.begin(); iter != h.end(); iter++) {
+			const sequence& s = iter->first;
+			bool done = false;
+			for(size_t i = 0; i < s.size() and not done; i++) {
+				for(size_t j = 0; j < best_sequence.size() and not done; j++) {
+					if(s[i] == best_sequence[j]) {
+						iter = h.erase(iter);
+						done = true;
+					}
+				}
+			}
+		}
+	}
 
 	return true;
 }
