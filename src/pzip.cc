@@ -72,9 +72,9 @@ template <typename T> typename T::iterator pz_erase_sequence(T&, typename T::ite
 template <typename T> typename T::iterator pz_replace_next_sequence(T&, typename T::iterator, const sequence&, symbol);
 template <typename T> int pz_replace_sequence(T&, const sequence&, symbol);
 template <typename T> histogram pz_get_histogram(const T&, size_t);
+size_t pz_get_byte_usage(const histogram::value_type&);
 histogram::iterator pz_get_best_sequence(histogram&);
 meta<block> pz_get_block(int);
-
 
 struct config {
 
@@ -224,21 +224,49 @@ template <typename T> int pz_replace_sequence(T& b, const sequence& s, symbol x)
 	return n;
 }
 
-template <typename T> histogram pz_get_histogram(const T& b, size_t /* gap */) {
+template <typename T> histogram pz_get_histogram(const T& b, size_t maxlen) {
+
 
 	histogram h;
 
-	for(auto iter = b.begin(); next(iter) != b.end(); iter++) {
+	for(auto iter = b.begin(); iter != b.end(); iter++) {
 
-		sequence key;
+		const size_t minlen1 = 2;
+		sequence key1;
 
-		key.push_back(*iter);
-		key.push_back(*next(iter));
+		for(auto jter = iter; jter != b.end() and key1.size() < maxlen; jter++) {
 
-		h[key]++;
+			key1.push_back(*jter);
+
+			if(key1.size() >= minlen1)
+				h[key1]++;
+		}
+
+		const size_t minlen2 = 3;
+		sequence key2;
+
+		key2.push_back(*iter);
+
+		for(auto jter = next(iter); jter != b.end() and key2.size() < maxlen; jter++) {
+
+			key2.push_back(*jter);
+
+			if(key2.size() >= minlen2)
+				h[key2]++;
+
+			key2.back() = symbol::wildcard;
+		}
 	}
 
 	return h;
+}
+
+size_t pz_get_byte_usage(const histogram::value_type& kv) {
+	size_t n = 0;
+	for(auto x : kv.first)
+		if(x != symbol::wildcard)
+			n++;
+	return n * kv.second;
 }
 
 histogram::iterator pz_get_best_sequence(histogram& h) {
@@ -246,7 +274,8 @@ histogram::iterator pz_get_best_sequence(histogram& h) {
 	auto iter = std::max_element(
 		h.begin(),
 		h.end(),
-		[] (histogram::value_type a, histogram::value_type b) -> bool { return b.second > a.second; }
+		[] (histogram::value_type a, histogram::value_type b) -> bool { return pz_get_byte_usage(b) > pz_get_byte_usage(a); }
+		/* { return b.second > a.second; } */
 	);
 
 	return ( iter != h.end() and iter->second > 1 ) ? iter : h.end();
@@ -276,6 +305,8 @@ meta<block> pz_get_block(int fd) {
 
 bool pz_process_fd(const config&, int fdin, int) {
 
+	const size_t sequence_maxlen = 8;
+
 	dictionary d;
 
 	symbol current_symbol = symbol::first;
@@ -289,9 +320,9 @@ bool pz_process_fd(const config&, int fdin, int) {
 
 	block b = mb.second;
 
-	std::cerr << b.size() << " bytes" << std::endl;
+	std::cerr << " : " << b.size() << " bytes" << std::endl;
 
-	histogram h = pz_get_histogram(b, 0);
+	histogram h = pz_get_histogram(b, sequence_maxlen);
 
 	auto best = pz_get_best_sequence(h);
 	long best_sz = best->second;
@@ -300,9 +331,11 @@ bool pz_process_fd(const config&, int fdin, int) {
 
 		best = pz_get_best_sequence(h);
 
-		if(best == h.end() or best->second * 4 < best_sz) {
+		if(best == h.end() or best->second * 2 < best_sz) {
 
-			h = pz_get_histogram(b, 0);
+			std::cerr << "updating histogram" << std::endl;
+
+			h = pz_get_histogram(b, sequence_maxlen);
 
 			best = pz_get_best_sequence(h);
 
@@ -312,22 +345,24 @@ bool pz_process_fd(const config&, int fdin, int) {
 			best_sz = best->second;
 		}
 
-		// const sequence& best_sequence = sequence({symbol(58),symbol::wildcard,symbol(97)});
-
 		const sequence& best_sequence = best->first;
-		d[current_symbol] = best_sequence;
 
 		// compress
 
 		int replacements = pz_replace_sequence(b, best_sequence, current_symbol);
 
-		std::cerr << "replaced " << replacements << " instances of " << (std::string)best_sequence;
-		std::cerr << " with symbol " << (int)current_symbol << " : " << b.size() << " bytes" << std::endl;
+		if(replacements > 0) {
 
-		current_symbol += 1;
+			std::cerr << "replaced " << replacements << " instances of " << (std::string)best_sequence;
+			std::cerr << " with symbol " << (int)current_symbol << " : " << b.size() << " bytes" << std::endl;
+
+			d[current_symbol] = best_sequence;
+			current_symbol += 1;
+		}
 
 		h.erase(best);
 
+		/*
 		for(auto iter = h.begin(); iter != h.end(); iter++) {
 			const sequence& s = iter->first;
 			bool done = false;
@@ -340,6 +375,7 @@ bool pz_process_fd(const config&, int fdin, int) {
 				}
 			}
 		}
+		*/
 	}
 
 	return true;
