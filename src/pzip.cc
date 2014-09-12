@@ -49,7 +49,7 @@ struct sequence : _sequence {
 	explicit operator std::string() const;
 };
 
-using histogram = std::map<sequence,long>;
+using histogram = std::map<sequence,size_t>;
 using dictionary = std::map<symbol,sequence>;
 using block = std::list<symbol>;
 template <typename T> using meta = std::pair<bool, T>;
@@ -72,7 +72,7 @@ template <typename T> typename T::iterator pz_erase_sequence(T&, typename T::ite
 template <typename T> typename T::iterator pz_replace_next_sequence(T&, typename T::iterator, const sequence&, symbol);
 template <typename T> int pz_replace_sequence(T&, const sequence&, symbol);
 template <typename T> histogram pz_get_histogram(const T&, size_t);
-size_t pz_get_byte_usage(const histogram::value_type&);
+size_t pz_bytes_used(const histogram::value_type&);
 histogram::iterator pz_get_best_sequence(histogram&);
 meta<block> pz_get_block(int);
 
@@ -231,7 +231,8 @@ template <typename T> histogram pz_get_histogram(const T& b, size_t maxlen) {
 
 	for(auto iter = b.begin(); iter != b.end(); iter++) {
 
-		const size_t minlen1 = 2;
+
+		const size_t minlen1 = 3;
 		sequence key1;
 
 		for(auto jter = iter; jter != b.end() and key1.size() < maxlen; jter++) {
@@ -242,7 +243,7 @@ template <typename T> histogram pz_get_histogram(const T& b, size_t maxlen) {
 				h[key1]++;
 		}
 
-		const size_t minlen2 = 3;
+		const size_t minlen2 = 2;
 		sequence key2;
 
 		key2.push_back(*iter);
@@ -261,7 +262,10 @@ template <typename T> histogram pz_get_histogram(const T& b, size_t maxlen) {
 	return h;
 }
 
-size_t pz_get_byte_usage(const histogram::value_type& kv) {
+size_t pz_bytes_used(const histogram::value_type& kv) {
+	/*
+	return kv.second;
+	*/
 	size_t n = 0;
 	for(auto x : kv.first)
 		if(x != symbol::wildcard)
@@ -274,8 +278,7 @@ histogram::iterator pz_get_best_sequence(histogram& h) {
 	auto iter = std::max_element(
 		h.begin(),
 		h.end(),
-		[] (histogram::value_type a, histogram::value_type b) -> bool { return pz_get_byte_usage(b) > pz_get_byte_usage(a); }
-		/* { return b.second > a.second; } */
+		[] (histogram::value_type a, histogram::value_type b) -> bool { return pz_bytes_used(b) > pz_bytes_used(a); }
 	);
 
 	return ( iter != h.end() and iter->second > 1 ) ? iter : h.end();
@@ -305,7 +308,7 @@ meta<block> pz_get_block(int fd) {
 
 bool pz_process_fd(const config&, int fdin, int) {
 
-	const size_t sequence_maxlen = 8;
+	const size_t sequence_maxlen = 6;
 
 	dictionary d;
 
@@ -325,7 +328,7 @@ bool pz_process_fd(const config&, int fdin, int) {
 	histogram h = pz_get_histogram(b, sequence_maxlen);
 
 	auto best = pz_get_best_sequence(h);
-	long best_sz = best->second;
+	size_t best_sz = best->second;
 
 	for(;;) {
 
@@ -361,21 +364,6 @@ bool pz_process_fd(const config&, int fdin, int) {
 		}
 
 		h.erase(best);
-
-		/*
-		for(auto iter = h.begin(); iter != h.end(); iter++) {
-			const sequence& s = iter->first;
-			bool done = false;
-			for(size_t i = 0; i < s.size() and not done; i++) {
-				for(size_t j = 0; j < best_sequence.size() and not done; j++) {
-					if(s[i] == best_sequence[j]) {
-						iter = h.erase(iter);
-						done = true;
-					}
-				}
-			}
-		}
-		*/
 	}
 
 	return true;
