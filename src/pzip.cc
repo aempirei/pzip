@@ -284,6 +284,19 @@ histogram::iterator pz_get_best_sequence(histogram& h) {
 	return ( iter != h.end() and iter->second > 1 ) ? iter : h.end();
 }
 
+bool pz_trim_histogram(histogram& h) {
+	auto best = pz_get_best_sequence(h);
+	if(best == h.end())
+		return false;
+	size_t minval = (size_t)rint(sqrt(best->second));
+	if(minval < 2)
+		minval = 2;
+	for(auto iter = h.begin(); iter != h.end(); iter++)
+		if(iter->second < minval)
+			iter = prev(h.erase(iter));
+	return true;
+}
+
 meta<block> pz_get_block(int fd) {
 	block b;
 
