@@ -385,11 +385,10 @@ bool pz_process_fd(const config&, int fdin, int) {
 		}
 
 		size_t es = 0;
-		for(auto xn : q) {
-				if(xn.second > 1) {
+
+		for(auto xn : q)
+				if(xn.second > 1)
 						es += 4;
-				}
-		}
 
 		std::cerr << "document : " << std::setw(6) << std::right << b.size() << " bytes , ";
 		std::cerr << "dictionary : " << std::setw(6) << std::right << es << " bytes ~ " << b.size() + es << std::endl;
