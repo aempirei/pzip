@@ -51,6 +51,7 @@ struct sequence : _sequence {
 
 using histogram = std::map<sequence,size_t>;
 using dictionary = std::map<symbol,sequence>;
+using rdictionary = std::map<sequence,symbol>;
 using block = std::list<symbol>;
 template <typename T> using meta = std::pair<bool, T>;
 
@@ -321,9 +322,10 @@ meta<block> pz_get_block(int fd) {
 
 bool pz_process_fd(const config&, int fdin, int) {
 
-	const size_t sequence_maxlen = 6;
+	const size_t sequence_maxlen = 2;
 
 	dictionary d;
+	rdictionary r;
 
 	symbol current_symbol = symbol::first;
 
@@ -338,45 +340,37 @@ bool pz_process_fd(const config&, int fdin, int) {
 
 	std::cerr << " : " << b.size() << " bytes" << std::endl;
 
-	histogram h = pz_get_histogram(b, sequence_maxlen);
-
-	auto best = pz_get_best_sequence(h);
-	size_t best_sz = best->second;
-
 	for(;;) {
 
-		best = pz_get_best_sequence(h);
+		histogram h = pz_get_histogram(b, sequence_maxlen);
 
-		if(best == h.end() or best->second * 2 < best_sz) {
+		if(not pz_trim_histogram(h))
+			break;
 
-			std::cerr << "updating histogram" << std::endl;
+		auto iter = b.begin();
 
-			h = pz_get_histogram(b, sequence_maxlen);
-
-			best = pz_get_best_sequence(h);
-
-			if(best == h.end())
-				throw std::runtime_error("nothing to compress");
-
-			best_sz = best->second;
+		while(next(iter) != b.end()) {
+			sequence x = { *iter, *next(iter) };
+			auto jter = h.find(x);
+			if(jter != h.end()) {
+				auto kter = r.find(x);
+				symbol s;
+				if(kter == r.end()) {
+					s = current_symbol;
+					d[current_symbol] = x;
+					r[x] = current_symbol;
+					current_symbol += 1;
+				} else {
+					s = kter->second;
+				}
+				iter = pz_erase_sequence(b, iter, x);
+				iter = b.insert(iter, s);
+			} else {
+				iter++;
+			}
 		}
 
-		const sequence& best_sequence = best->first;
-
-		// compress
-
-		int replacements = pz_replace_sequence(b, best_sequence, current_symbol);
-
-		if(replacements > 0) {
-
-			std::cerr << "replaced " << replacements << " instances of " << (std::string)best_sequence;
-			std::cerr << " with symbol " << (int)current_symbol << " : " << b.size() << " bytes" << std::endl;
-
-			d[current_symbol] = best_sequence;
-			current_symbol += 1;
-		}
-
-		h.erase(best);
+		std::cerr << b.size() << " bytes" << std::endl;
 	}
 
 	return true;
