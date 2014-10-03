@@ -324,9 +324,6 @@ bool pz_process_fd(const config&, int fdin, int) {
 
 	const size_t sequence_maxlen = 2;
 
-	dictionary d;
-	rdictionary r;
-
 	symbol current_symbol = symbol::first;
 
 	meta<block> mb = pz_get_block(fdin);
@@ -338,6 +335,11 @@ bool pz_process_fd(const config&, int fdin, int) {
 
 	block b = mb.second;
 
+	dictionary d;
+	rdictionary r;
+
+	histogram q;
+
 	std::cerr << " : " << b.size() << " bytes" << std::endl;
 
 	for(;;) {
@@ -347,30 +349,50 @@ bool pz_process_fd(const config&, int fdin, int) {
 		if(not pz_trim_histogram(h))
 			break;
 
-		auto iter = b.begin();
+		auto bpos = b.begin();
 
-		while(next(iter) != b.end()) {
-			sequence x = { *iter, *next(iter) };
+		while(next(bpos) != b.end()) {
+
+			const sequence x = { *bpos, *next(bpos) };
+
 			auto jter = h.find(x);
-			if(jter != h.end()) {
-				auto kter = r.find(x);
-				symbol s;
-				if(kter == r.end()) {
-					s = current_symbol;
-					d[current_symbol] = x;
-					r[x] = current_symbol;
-					current_symbol += 1;
-				} else {
-					s = kter->second;
-				}
-				iter = pz_erase_sequence(b, iter, x);
-				iter = b.insert(iter, s);
+
+			if(jter == h.end()) {
+					bpos++;
 			} else {
-				iter++;
+
+					auto kter = r.find(x);
+					symbol s;
+
+					if(kter == r.end()) {
+
+							s = current_symbol;
+							d[current_symbol] = x;
+							r[x] = current_symbol;
+							current_symbol += 1;
+
+					} else {
+
+							s = kter->second;
+					}
+
+					q[x]++;
+
+					bpos = pz_erase_sequence(b, bpos, x);
+					bpos = b.insert(bpos, s);
+
 			}
 		}
 
-		std::cerr << b.size() << " bytes" << std::endl;
+		size_t es = 0;
+		for(auto xn : q) {
+				if(xn.second > 1) {
+						es += 4;
+				}
+		}
+
+		std::cerr << "document : " << std::setw(6) << std::right << b.size() << " bytes , ";
+		std::cerr << "dictionary : " << std::setw(6) << std::right << es << " bytes ~ " << b.size() + es << std::endl;
 	}
 
 	return true;
