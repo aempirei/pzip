@@ -113,21 +113,25 @@ int main() {
 
 		std::cout << "nullary pattern := " << to_string(pattern) << std::endl;
 
+		histogram.clear();
+
 		auto match = sequence.begin();
 
+		size_t total = 0;
+
 		while((match = find_subseq(match, sequence.end(), pattern.begin(), pattern.end())) != sequence.end()) {
-
-				auto match_end = match;
-				std::advance(match_end, pattern.size());
-
-				sequence_type subseq(match, match_end);
-
-				std::cout << "pattern matches at position ";
-				std::cout << std::dec << std::noshowbase << std::distance(sequence.begin(), match);
-				std::cout << " := " << to_string(subseq) << std::endl;
-
 				match++;
+				histogram[*match]++;
+				total++;
 		}
+
+		std::cout << "nullary histogram (mean " << std::dec << std::noshowbase << (total / histogram.size()) << ") := {" << std::endl;
+
+		for(auto& arrow : histogram)
+				if(2 * arrow.second * histogram.size() > total)
+						std::cout << (char)arrow.first << " := " << arrow.second << std::endl;
+
+		std::cout << '}' << std::endl;
 
 		return 0;
 }
