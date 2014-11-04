@@ -5,7 +5,7 @@ LIBFLAGS = -Llib -lpz
 TARGETS = lib/libpz.a bin/pzip
 INSTALL_PATH = /usr/local
 
-.PHONY: all clean install test library
+.PHONY: all clean install test library esl
 
 all: $(TARGETS)
 
@@ -32,3 +32,9 @@ lib/libpz.a: src/libpz.o
 bin/pzip: src/pzip.o lib/libpz.a
 	if [ ! -d bin ]; then mkdir -vp bin; fi
 	$(CXX) $(CXXFLAGS) -o $@ $< $(LIBFLAGS)
+
+esl: bin/esl
+
+bin/esl: src/esl.o
+	if [ ! -d bin ]; then mkdir -vp bin; fi
+	$(CXX) $(CXXFLAGS) -o $@ $<
