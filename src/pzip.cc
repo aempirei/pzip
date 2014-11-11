@@ -364,6 +364,25 @@ size_t pz_expand_singletons(dictionary& d, metric<symbol>& sh) {
     return n;
 }
 
+void write_utf8(unsigned int code_point) {
+    if (code_point < 0x80) {
+        putchar(code_point);
+    } else if (code_point <= 0x7FF) {
+        putchar((code_point >> 6) + 0xC0);
+        putchar((code_point & 0x3F) + 0x80);
+    } else if (code_point <= 0xFFFF) {
+        putchar((code_point >> 12) + 0xE0);
+        putchar(((code_point >> 6) & 0x3F) + 0x80);
+        putchar((code_point & 0x3F) + 0x80);
+    } else if (code_point <= 0x10FFFF) {
+        putchar((code_point >> 18) + 0xF0);
+        putchar(((code_point >> 12) & 0x3F) + 0x80);
+        putchar(((code_point >> 6) & 0x3F) + 0x80);
+        putchar((code_point & 0x3F) + 0x80);
+    }
+}
+
+
 bool pz_process_fd(const config&, int fdin, int) {
 
     const size_t sequence_maxlen = 2;
@@ -382,9 +401,9 @@ bool pz_process_fd(const config&, int fdin, int) {
     dictionary d;
     rdictionary r;
 
-    histogram q;
+    for(int i = 0; i < 16; i++) {
 
-    std::cerr << " : " << b.size() << " bytes" << std::endl;
+    std::cerr << " : " << b.size() << " symbols" << std::endl;
 
     for(;;) {
 
@@ -420,20 +439,18 @@ bool pz_process_fd(const config&, int fdin, int) {
                     s = kter->second;
                 }
 
-                q[x]++;
-
                 bpos = pz_erase_sequence(b, bpos, x);
                 bpos = b.insert(bpos, s);
-
             }
         }
 
         std::cerr << "document: " << b.size() << " symbols ~ ";
         std::cerr << "dictionary: " << d.size() << " symbols" << std::endl;
-
     }
 
     metric<symbol> symbol_histogram;
+
+    symbol_histogram.clear();
 
     for(symbol x : b)
         symbol_histogram[x]++;
@@ -448,6 +465,8 @@ bool pz_process_fd(const config&, int fdin, int) {
     for(const auto& x : symbol_histogram)
         if(x.second == 1)
             d.erase(x.first);
+
+    /*
 
     std::map<symbol,symbol> remap;
 
@@ -480,9 +499,21 @@ bool pz_process_fd(const config&, int fdin, int) {
     }
 
     d = e;
+    */
 
     std::cerr << "document: " << b.size() << " symbols ~ ";
     std::cerr << "dictionary: " << d.size() << " symbols" << std::endl;
+    }
+
+    for(const auto& rule : d) {
+        write_utf8((unsigned int)rule.first);
+        write_utf8(rule.second.size());
+        for(size_t n = 0; n < rule.second.size(); n++)
+            write_utf8((unsigned int)rule.second[n]);
+    }
+
+    for(symbol x : b)
+        write_utf8((unsigned int)x);
 
     return true;
 }
