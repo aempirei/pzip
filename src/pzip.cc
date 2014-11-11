@@ -399,30 +399,34 @@ bool pz_process_fd(const config&, int fdin, int) {
         for(size_t n = 0; n < x.second.size(); n++)
             sh[x.second[n]]++;
 
-    size_t one=0;
-    size_t zero=0;
-    size_t two=0;
-    for(const auto& x : sh) {
-        if(x.second == 0) zero++;
-        if(x.second == 1) one++;
-        if(x.second == 2) two++;
-    }
-
-    std::cout << "singles: " << one << " ~ zeros: " << zero << " ~ twos: " << two << std::endl;
-
-
     for(auto bpos = b.begin(); bpos != b.end(); bpos++) {
-        if(sh[*bpos] == 1) {
-            symbol sym = *bpos;
-            const sequence& iseq = d[sym];
+        symbol sym = *bpos;
+        if(sh[sym] == 1) {
+            const sequence& seq = d[sym];
             bpos = b.erase(bpos);
-            bpos = b.insert(bpos, iseq.begin(), iseq.end());
-            d.erase(sym);
+            bpos = b.insert(bpos, seq.begin(), seq.end());
         }
     }
 
+    for(auto& x : d) {
+        block y(x.second.begin(), x.second.end());
+        for(auto ypos = y.begin(); ypos != y.end(); ypos++) {
+            symbol sym = *ypos;
+            if(sh[sym] == 1) {
+                const sequence& seq = d[sym];
+                ypos = y.erase(ypos);
+                ypos = y.insert(ypos, seq.begin(), seq.end());
+            }
+        }
+        x.second = sequence(y.begin(), y.end());
+    }
+
+    for(const auto& x : sh)
+        if(x.second == 1)
+            d.erase(x.first);
+
     std::cerr << "document: " << b.size() << " symbols ~ ";
-        std::cerr << "dictionary: " << d.size() << " symbols" << std::endl;
+    std::cerr << "dictionary: " << d.size() << " symbols" << std::endl;
 
 
     return true;
