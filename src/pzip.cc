@@ -95,14 +95,15 @@ enum struct symbol : int {
 	first = 256
 };
 
-symbol operator+(const symbol& x, int y) {
-	return symbol((int)x + y);
-}
+inline symbol operator+(const symbol& x, int y) { return symbol((int)x + y); }
+inline symbol operator-(const symbol& x, int y) { return symbol((int)x - y); }
+inline symbol operator*(const symbol& x, int y) { return symbol((int)x * y); }
+inline symbol operator%(const symbol& x, int y) { return symbol((int)x % y); }
 
-symbol& operator+=(symbol& x, int y) {
-	x = x + y;
-	return x;
-}
+inline symbol& operator+=(symbol& x, int y) { x = x + y; return x; }
+inline symbol& operator-=(symbol& x, int y) { x = x - y; return x; }
+inline symbol& operator*=(symbol& x, int y) { x = x * y; return x; }
+inline symbol& operator%=(symbol& x, int y) { x = x % y; return x; }
 
 sequence::operator std::string() const {
 	std::stringstream ss;
@@ -384,14 +385,27 @@ bool pz_process_fd(const config&, int fdin, int) {
 			}
 		}
 
-		size_t es = 0;
+		std::cerr << "document : " << std::setw(6) << std::right << b.size() << " symbols ~ ";
+		std::cerr << "dictionary : " << std::setw(6) << std::right << d.size() << " symbols" << std::endl;
 
-		for(auto xn : q)
-				if(xn.second > 1)
-						es += 4;
+        std::map<symbol,size_t> r;
 
-		std::cerr << "document : " << std::setw(6) << std::right << b.size() << " bytes , ";
-		std::cerr << "dictionary : " << std::setw(6) << std::right << es << " bytes ~ " << b.size() + es << std::endl;
+        for(symbol x : b)
+            r[x]++;
+
+        for(const auto& x : d)
+            for(size_t n = 0; n < x.second.size(); n++)
+                r[x.second[n]]++;
+
+        size_t one=0;
+        size_t zero=0;
+        size_t two=0;
+        for(const auto& x : r) {
+            if(x.second == 0) zero++;
+            if(x.second == 1) one++;
+            if(x.second == 2) two++;
+        }
+        std::cout << "singles: " << one << " ~ zeros: " << zero << " ~ twos: " << two << std::endl;
 	}
 
 	return true;
