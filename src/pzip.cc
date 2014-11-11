@@ -49,11 +49,13 @@ struct sequence : _sequence {
 	explicit operator std::string() const;
 };
 
-using histogram = std::map<sequence,size_t>;
+template <typename T> using meta = std::pair<bool, T>;
+template <typename T> using metric = std::map<T,size_t>;
+
+using block = std::list<symbol>;
+using histogram = metric<sequence>;
 using dictionary = std::map<symbol,sequence>;
 using rdictionary = std::map<sequence,symbol>;
-using block = std::list<symbol>;
-template <typename T> using meta = std::pair<bool, T>;
 
 const char *pz_extension = ".pz";
 
@@ -321,6 +323,47 @@ meta<block> pz_get_block(int fd) {
     return meta<block>(true,b);
 }
 
+size_t pz_expand_singletons(block& b, dictionary& d, metric<symbol>& sh) {
+
+    size_t n = 0;
+
+    auto pos = b.begin();
+
+    while(pos != b.end()) {
+
+        const symbol sym = *pos;
+
+        if(sh[sym] == 1) {
+
+            const sequence& seq = d[sym];
+
+            pos = b.erase(pos);
+            pos = b.insert(pos, seq.begin(), seq.end());
+
+            n++;
+
+        } else {
+
+            pos++;
+        }
+    }
+
+    return n;
+}
+ 
+size_t pz_expand_singletons(dictionary& d, metric<symbol>& sh) {
+
+    size_t n = 0;
+
+    for(auto& rule : d) {
+        block b(rule.second.begin(), rule.second.end());
+        n += pz_expand_singletons(b, d, sh);
+        rule.second = sequence(b.begin(), b.end());
+    }
+
+    return n;
+}
+
 bool pz_process_fd(const config&, int fdin, int) {
 
     const size_t sequence_maxlen = 2;
@@ -362,8 +405,8 @@ bool pz_process_fd(const config&, int fdin, int) {
                 bpos++;
             } else {
 
-                auto kter = r.find(x);
                 symbol s;
+                auto kter = r.find(x);
 
                 if(kter == r.end()) {
 
@@ -390,44 +433,56 @@ bool pz_process_fd(const config&, int fdin, int) {
 
     }
 
-    std::map<symbol,size_t> sh;
+    metric<symbol> symbol_histogram;
 
     for(symbol x : b)
-        sh[x]++;
+        symbol_histogram[x]++;
 
-    for(const auto& x : d)
-        for(size_t n = 0; n < x.second.size(); n++)
-            sh[x.second[n]]++;
+    for(const auto& rule : d)
+        for(size_t n = 0; n < rule.second.size(); n++)
+            symbol_histogram[rule.second[n]]++;
 
-    for(auto bpos = b.begin(); bpos != b.end(); bpos++) {
-        symbol sym = *bpos;
-        if(sh[sym] == 1) {
-            const sequence& seq = d[sym];
-            bpos = b.erase(bpos);
-            bpos = b.insert(bpos, seq.begin(), seq.end());
-        }
-    }
+    pz_expand_singletons(b, d, symbol_histogram);
+    pz_expand_singletons(d, symbol_histogram);
 
-    for(auto& x : d) {
-        block y(x.second.begin(), x.second.end());
-        for(auto ypos = y.begin(); ypos != y.end(); ypos++) {
-            symbol sym = *ypos;
-            if(sh[sym] == 1) {
-                const sequence& seq = d[sym];
-                ypos = y.erase(ypos);
-                ypos = y.insert(ypos, seq.begin(), seq.end());
-            }
-        }
-        x.second = sequence(y.begin(), y.end());
-    }
-
-    for(const auto& x : sh)
+    for(const auto& x : symbol_histogram)
         if(x.second == 1)
             d.erase(x.first);
 
+    std::map<symbol,symbol> remap;
+
+    for(symbol s = symbol::wildcard; s < symbol::first; s += 1)
+        remap[s] = s;
+
+    symbol current = symbol::first;
+
+    for(const auto& rule : d) {
+        if(rule.first >= symbol::first) {
+            remap[rule.first] = current;
+            current += 1;
+        }
+    }
+
+    for(symbol& x : b)
+        x = remap.at(x);
+
+    dictionary e;
+
+    for(const auto& rule : d) {
+
+        symbol x = rule.first;
+        sequence s = rule.second;
+
+        for(size_t n = 0; n < s.size(); n++)
+            s[n] = remap.at(s[n]);
+
+        e[remap.at(x)] = s;
+    }
+
+    d = e;
+
     std::cerr << "document: " << b.size() << " symbols ~ ";
     std::cerr << "dictionary: " << d.size() << " symbols" << std::endl;
-
 
     return true;
 }
