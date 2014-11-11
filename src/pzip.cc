@@ -265,150 +265,167 @@ template <typename T> histogram pz_get_histogram(const T& b, size_t maxlen) {
 }
 
 size_t pz_bytes_used(const histogram::value_type& kv) {
-	/*
-	return kv.second;
-	*/
-	size_t n = 0;
-	for(auto x : kv.first)
-		if(x != symbol::wildcard)
-			n++;
-	return n * kv.second;
+    /*
+       return kv.second;
+     */
+    size_t n = 0;
+    for(auto x : kv.first)
+        if(x != symbol::wildcard)
+            n++;
+    return n * kv.second;
 }
 
 histogram::iterator pz_get_best_sequence(histogram& h) {
 
-	auto iter = std::max_element(
-		h.begin(),
-		h.end(),
-		[] (histogram::value_type a, histogram::value_type b) -> bool { return pz_bytes_used(b) > pz_bytes_used(a); }
-	);
+    auto iter = std::max_element(
+            h.begin(),
+            h.end(),
+            [] (histogram::value_type a, histogram::value_type b) -> bool { return pz_bytes_used(b) > pz_bytes_used(a); }
+            );
 
-	return ( iter != h.end() and iter->second > 1 ) ? iter : h.end();
+    return ( iter != h.end() and iter->second > 1 ) ? iter : h.end();
 }
 
 bool pz_trim_histogram(histogram& h) {
-	auto best = pz_get_best_sequence(h);
-	if(best == h.end())
-		return false;
-	size_t minval = (size_t)rint(sqrt(best->second));
-	if(minval < 2)
-		minval = 2;
-	for(auto iter = h.begin(); iter != h.end(); iter++)
-		if(iter->second < minval)
-			iter = prev(h.erase(iter));
-	return true;
+    auto best = pz_get_best_sequence(h);
+    if(best == h.end())
+        return false;
+    size_t minval = (size_t)rint(sqrt(best->second));
+    if(minval < 2)
+        minval = 2;
+    for(auto iter = h.begin(); iter != h.end(); iter++)
+        if(iter->second < minval)
+            iter = prev(h.erase(iter));
+    return true;
 }
 
 meta<block> pz_get_block(int fd) {
-	block b;
+    block b;
 
-	unsigned char buf[1024];
-	int n;
+    unsigned char buf[1024];
+    int n;
 
-	do {
-		n = read(fd, buf, sizeof(buf));
-		if(n == -1) {
-			if(errno == EAGAIN)
-				continue;
-			return meta<block>(false,block());
-		}
+    do {
+        n = read(fd, buf, sizeof(buf));
+        if(n == -1) {
+            if(errno == EAGAIN)
+                continue;
+            return meta<block>(false,block());
+        }
 
-		for(int i = 0; i < n; i++)
-			b.push_back((symbol)buf[i]);
+        for(int i = 0; i < n; i++)
+            b.push_back((symbol)buf[i]);
 
-	} while(n != 0);
+    } while(n != 0);
 
-	return meta<block>(true,b);
+    return meta<block>(true,b);
 }
 
 bool pz_process_fd(const config&, int fdin, int) {
 
-	const size_t sequence_maxlen = 2;
+    const size_t sequence_maxlen = 2;
 
-	symbol current_symbol = symbol::first;
+    symbol current_symbol = symbol::first;
 
-	meta<block> mb = pz_get_block(fdin);
+    meta<block> mb = pz_get_block(fdin);
 
-	if(!mb.first) {
-		std::cerr << strerror(errno) << std::endl;
-		return false;
-	}
+    if(!mb.first) {
+        std::cerr << strerror(errno) << std::endl;
+        return false;
+    }
 
-	block b = mb.second;
+    block b = mb.second;
 
-	dictionary d;
-	rdictionary r;
+    dictionary d;
+    rdictionary r;
 
-	histogram q;
+    histogram q;
 
-	std::cerr << " : " << b.size() << " bytes" << std::endl;
+    std::cerr << " : " << b.size() << " bytes" << std::endl;
 
-	for(;;) {
+    for(;;) {
 
-		histogram h = pz_get_histogram(b, sequence_maxlen);
+        histogram h = pz_get_histogram(b, sequence_maxlen);
 
-		if(not pz_trim_histogram(h))
-			break;
+        if(not pz_trim_histogram(h))
+            break;
 
-		auto bpos = b.begin();
+        auto bpos = b.begin();
 
-		while(next(bpos) != b.end()) {
+        while(next(bpos) != b.end()) {
 
-			const sequence x = { *bpos, *next(bpos) };
+            const sequence x = { *bpos, *next(bpos) };
 
-			auto jter = h.find(x);
+            auto jter = h.find(x);
 
-			if(jter == h.end()) {
-					bpos++;
-			} else {
+            if(jter == h.end()) {
+                bpos++;
+            } else {
 
-					auto kter = r.find(x);
-					symbol s;
+                auto kter = r.find(x);
+                symbol s;
 
-					if(kter == r.end()) {
+                if(kter == r.end()) {
 
-							s = current_symbol;
-							d[current_symbol] = x;
-							r[x] = current_symbol;
-							current_symbol += 1;
+                    s = current_symbol;
+                    d[current_symbol] = x;
+                    r[x] = current_symbol;
+                    current_symbol += 1;
 
-					} else {
+                } else {
 
-							s = kter->second;
-					}
+                    s = kter->second;
+                }
 
-					q[x]++;
+                q[x]++;
 
-					bpos = pz_erase_sequence(b, bpos, x);
-					bpos = b.insert(bpos, s);
+                bpos = pz_erase_sequence(b, bpos, x);
+                bpos = b.insert(bpos, s);
 
-			}
-		}
-
-		std::cerr << "document : " << std::setw(6) << std::right << b.size() << " symbols ~ ";
-		std::cerr << "dictionary : " << std::setw(6) << std::right << d.size() << " symbols" << std::endl;
-
-        std::map<symbol,size_t> r;
-
-        for(symbol x : b)
-            r[x]++;
-
-        for(const auto& x : d)
-            for(size_t n = 0; n < x.second.size(); n++)
-                r[x.second[n]]++;
-
-        size_t one=0;
-        size_t zero=0;
-        size_t two=0;
-        for(const auto& x : r) {
-            if(x.second == 0) zero++;
-            if(x.second == 1) one++;
-            if(x.second == 2) two++;
+            }
         }
-        std::cout << "singles: " << one << " ~ zeros: " << zero << " ~ twos: " << two << std::endl;
-	}
 
-	return true;
+        std::cerr << "document: " << b.size() << " symbols ~ ";
+        std::cerr << "dictionary: " << d.size() << " symbols" << std::endl;
+
+    }
+
+    std::map<symbol,size_t> sh;
+
+    for(symbol x : b)
+        sh[x]++;
+
+    for(const auto& x : d)
+        for(size_t n = 0; n < x.second.size(); n++)
+            sh[x.second[n]]++;
+
+    size_t one=0;
+    size_t zero=0;
+    size_t two=0;
+    for(const auto& x : sh) {
+        if(x.second == 0) zero++;
+        if(x.second == 1) one++;
+        if(x.second == 2) two++;
+    }
+
+    std::cout << "singles: " << one << " ~ zeros: " << zero << " ~ twos: " << two << std::endl;
+
+
+    for(auto bpos = b.begin(); bpos != b.end(); bpos++) {
+        if(sh[*bpos] == 1) {
+            symbol sym = *bpos;
+            const sequence& iseq = d[sym];
+            bpos = b.erase(bpos);
+            bpos = b.insert(bpos, iseq.begin(), iseq.end());
+            d.erase(sym);
+        }
+    }
+
+    std::cerr << "document: " << b.size() << " symbols ~ ";
+        std::cerr << "dictionary: " << d.size() << " symbols" << std::endl;
+
+
+    return true;
 }
 
 bool pz_process_file(const config& cfg, const char *filenamein) {
