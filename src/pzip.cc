@@ -33,15 +33,11 @@ extern "C" {
 }
 
 #include <libpz.hh>
+#include <config.hh>
+#include <symbol.hh>
 
-struct config;
 struct sequence;
 struct pz;
-
-enum struct symbol;
-
-symbol operator+(const symbol&, int);
-symbol& operator+=(symbol&, int);
 
 using _sequence = std::vector<symbol>;
 struct sequence : _sequence {
@@ -59,8 +55,6 @@ using rdictionary = std::map<sequence,symbol>;
 
 const char *pz_extension = ".pz";
 
-void usage(const char *);
-
 bool pz_process_file(const config&, const char *);
 bool pz_process_fd(const config&, int, int);
 
@@ -75,38 +69,11 @@ template <typename T> typename T::iterator pz_erase_sequence(T&, typename T::ite
 template <typename T> typename T::iterator pz_replace_next_sequence(T&, typename T::iterator, const sequence&, symbol);
 template <typename T> int pz_replace_sequence(T&, const sequence&, symbol);
 template <typename T> histogram pz_get_histogram(const T&, size_t);
+
 size_t pz_bytes_used(const histogram::value_type&);
 histogram::iterator pz_get_best_sequence(histogram&);
 meta<block> pz_get_block(int);
 metric<symbol> pz_symbol_histogram(const block&, const dictionary&);
-
-struct config {
-
-	bool help = false;
-	bool compress = true;
-	bool keep = false;
-	bool force = false;
-	bool stdoutput = false;
-	bool quiet = false;
-	bool verbose = false;
-
-	std::list<std::string> files;
-};
-
-enum struct symbol : int {
-	wildcard = -1,
-	first = 256
-};
-
-inline symbol operator+(const symbol& x, int y) { return symbol((int)x + y); }
-inline symbol operator-(const symbol& x, int y) { return symbol((int)x - y); }
-inline symbol operator*(const symbol& x, int y) { return symbol((int)x * y); }
-inline symbol operator%(const symbol& x, int y) { return symbol((int)x % y); }
-
-inline symbol& operator+=(symbol& x, int y) { x = x + y; return x; }
-inline symbol& operator-=(symbol& x, int y) { x = x - y; return x; }
-inline symbol& operator*=(symbol& x, int y) { x = x * y; return x; }
-inline symbol& operator%=(symbol& x, int y) { x = x % y; return x; }
 
 sequence::operator std::string() const {
 	std::stringstream ss;
@@ -116,24 +83,6 @@ sequence::operator std::string() const {
 	while(iter != end())
 		ss << ' ' << (int)(*iter++);
 	return ss.str();
-}
-
-void usage(const char *prog) {
-
-	std::cerr << prog << " file compressor." << std::endl << std::endl <<
-
-		"usage: " << prog << " [{option|file}]..." << std::endl << std::endl <<
-
-		"\t-h\tprint this message" << std::endl <<
-		"\t-d\tforce decompression" << std::endl <<
-		"\t-z\tforce compression" << std::endl <<
-		"\t-k\tkeep (don't delete) input files" << std::endl <<
-		"\t-f\toverwrite existing output files" << std::endl <<
-		"\t-c\toutput to standard out" << std::endl <<
-		"\t-q\tsuppress output messages" << std::endl <<
-		"\t-v\tbe verbose" << std::endl << std::endl <<
-
-		"If no file names are given, " << prog << " uses stdin/stdout." << std::endl << std::endl;
 }
 
 const static std::map<unsigned int, const char *> file_type = {
@@ -423,8 +372,7 @@ void pz_remap(block& b, dictionary& d) {
 
     for(const auto& rule : d) {
         if(rule.first >= symbol::first) {
-            remap[rule.first] = current;
-            current += 1;
+            remap[rule.first] = current++;
         }
     }
 
@@ -498,8 +446,7 @@ bool pz_process_fd(const config&, int fdin, int) {
 
                         s = current_symbol;
                         d[current_symbol] = x;
-                        r[x] = current_symbol;
-                        current_symbol += 1;
+                        r[x] = current_symbol++;
 
                     } else {
 
@@ -664,30 +611,13 @@ int main(int argc, char **argv) {
 
 	config cfg;
 
-	while ((opt = getopt(argc, argv, "hdzkfcqv")) != -1) {
-
-		switch (opt) {
-
-			case 'h': cfg.help      = true  ; break;
-			case 'd': cfg.compress  = false ; break;
-			case 'z': cfg.compress  = true  ; break;
-			case 'k': cfg.keep      = true  ; break;
-			case 'f': cfg.force     = true  ; break;
-			case 'c': cfg.stdoutput = true  ; break;
-			case 'q': cfg.quiet     = true  ; break;
-			case 'v': cfg.verbose   = true  ; break;
-
-			default:
-				  std::cerr << "Try `" << *argv << " -h' for more information." << std::endl;
-				  return -1;
-		}
-	}
-
-	for(int i = optind; i < argc; i++)
-		cfg.files.push_back(argv[i]);
+        if(not cfg.getopt(argc, argv)) {
+            std::cerr << "Try `" << *argv << " -h' for more information." << std::endl;
+            return -1;
+        }
 
 	if(cfg.help) {
-		usage(*argv);
+		cfg.usage(*argv);
 		return 0;
 	}
 

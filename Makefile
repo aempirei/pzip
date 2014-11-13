@@ -25,7 +25,7 @@ test: $(TARGETS)
 
 library: lib/libpz.a
 
-lib/libpz.a: src/libpz.o
+lib/libpz.a: src/libpz.o src/config.o
 	if [ ! -d lib ]; then mkdir -vp lib; fi
 	ar crfv $@ $^ 
 
