@@ -36,22 +36,13 @@ extern "C" {
 #include <config.hh>
 #include <symbol.hh>
 
-struct sequence;
-struct pz;
-
-using _sequence = std::vector<symbol>;
-struct sequence : _sequence {
-	using _sequence::_sequence;
-	explicit operator std::string() const;
-};
-
 template <typename T> using meta = std::pair<bool, T>;
 template <typename T> using metric = std::map<T,size_t>;
 
 using block = std::list<symbol>;
-using histogram = metric<sequence>;
-using dictionary = std::map<symbol,sequence>;
-using rdictionary = std::map<sequence,symbol>;
+using histogram = metric<block>;
+using dictionary = std::map<symbol,block>;
+using rdictionary = std::map<block,symbol>;
 
 const char *pz_extension = ".pz";
 
@@ -63,27 +54,17 @@ bool pz_decompress(const config&, int, int);
 
 bool pz_compare_symbols(symbol, symbol);
 
-template <typename T> bool pz_match_sequence(T, T, const sequence&);
-template <typename T> T pz_find_sequence(T, T, const sequence&);
-template <typename T> typename T::iterator pz_erase_sequence(T&, typename T::iterator, const sequence&);
-template <typename T> typename T::iterator pz_replace_next_sequence(T&, typename T::iterator, const sequence&, symbol);
-template <typename T> int pz_replace_sequence(T&, const sequence&, symbol);
+template <typename T> bool pz_match_block(T, T, const block&);
+template <typename T> T pz_find_block(T, T, const block&);
+template <typename T> typename T::iterator pz_erase_block(T&, typename T::iterator, const block&);
+template <typename T> typename T::iterator pz_replace_next_block(T&, typename T::iterator, const block&, symbol);
+template <typename T> int pz_replace_block(T&, const block&, symbol);
 template <typename T> histogram pz_get_histogram(const T&, size_t);
 
 size_t pz_bytes_used(const histogram::value_type&);
-histogram::iterator pz_get_best_sequence(histogram&);
+histogram::iterator pz_get_best_block(histogram&);
 meta<block> pz_get_block(int);
 metric<symbol> pz_symbol_histogram(const block&, const dictionary&);
-
-sequence::operator std::string() const {
-	std::stringstream ss;
-	auto iter = begin();
-	if(iter != end())
-		ss << (int)(*iter++);
-	while(iter != end())
-		ss << ' ' << (int)(*iter++);
-	return ss.str();
-}
 
 const static std::map<unsigned int, const char *> file_type = {
 	{ S_IFBLK,  "block device" }, 
@@ -110,7 +91,7 @@ bool pz_compare_symbols(symbol a, symbol b) {
 	return a == b or a == symbol::wildcard or b == symbol::wildcard;
 }
 
-template <class T> bool pz_match_sequence(T begin, T end, const sequence& s) {
+template <class T> bool pz_match_block(T begin, T end, const block& s) {
 
 	auto ster = s.begin();
 	auto bter = begin;
@@ -122,23 +103,23 @@ template <class T> bool pz_match_sequence(T begin, T end, const sequence& s) {
 	return true;
 }
 
-template <class T> T pz_find_sequence(T begin, T end, const sequence& s) {
+template <class T> T pz_find_block(T begin, T end, const block& s) {
 
-	for(auto position = begin; position != end; position++)
-		if(pz_match_sequence(position, end, s))
+	for(auto position = begin; position != end; ++position)
+		if(pz_match_block(position, end, s))
 			return position;
 
 	return end;
 }
 
-template <typename T> typename T::iterator pz_erase_sequence(T& b, typename T::iterator pos, const sequence& s) {
+template <typename T> typename T::iterator pz_erase_block(T& b, typename T::iterator pos, const block& s) {
 
 	auto bter = pos--;
 	
 	for(auto ster = s.begin(); ster != s.end(); ster++) {
 
 		if(bter == b.end())
-			throw std::runtime_error("pz_erase_sequence(): unexpectedly read past last element in object");
+			throw std::runtime_error("pz_erase_block(): unexpectedly read past last element in object");
 		
 		auto cter = bter++;
 
@@ -147,32 +128,32 @@ template <typename T> typename T::iterator pz_erase_sequence(T& b, typename T::i
 		} else if(*cter == *ster) {
 			b.erase(cter);
 		} else {
-			throw std::runtime_error("pz_erase_sequence(): unexpectedly read past last element in object");
+			throw std::runtime_error("pz_erase_block(): unexpectedly read past last element in object");
 		}
 	}
 
 	return ++pos;
 }
 
-template <typename T> typename T::iterator pz_replace_next_sequence(T& b, typename T::iterator pos, const sequence& s, symbol x) {
+template <typename T> typename T::iterator pz_replace_next_block(T& b, typename T::iterator pos, const block& s, symbol x) {
 
-	pos = pz_find_sequence(pos, b.end(), s);
+	pos = pz_find_block(pos, b.end(), s);
 
 	if(pos != b.end()) {
-		pos = pz_erase_sequence(b, pos, s);
+		pos = pz_erase_block(b, pos, s);
 		pos = b.insert(pos, x);
 	}
 
 	return pos;
 }
 
-template <typename T> int pz_replace_sequence(T& b, const sequence& s, symbol x) {
+template <typename T> int pz_replace_block(T& b, const block& s, symbol x) {
 
 	int n = 0;
 
 	auto position = b.begin();
 
-	while((position = pz_replace_next_sequence(b, position, s, x)) != b.end())
+	while((position = pz_replace_next_block(b, position, s, x)) != b.end())
 		n++;
 
 	return n;
@@ -187,7 +168,7 @@ template <typename T> histogram pz_get_histogram(const T& b, size_t maxlen) {
 
 
 		const size_t minlen1 = 3;
-		sequence key1;
+		block key1;
 
 		for(auto jter = iter; jter != b.end() and key1.size() < maxlen; jter++) {
 
@@ -198,7 +179,7 @@ template <typename T> histogram pz_get_histogram(const T& b, size_t maxlen) {
 		}
 
 		const size_t minlen2 = 2;
-		sequence key2;
+		block key2;
 
 		key2.push_back(*iter);
 
@@ -217,17 +198,16 @@ template <typename T> histogram pz_get_histogram(const T& b, size_t maxlen) {
 }
 
 size_t pz_bytes_used(const histogram::value_type& kv) {
-    /*
-       return kv.second;
-     */
+
     size_t n = 0;
     for(auto x : kv.first)
         if(x != symbol::wildcard)
             n++;
+
     return n * kv.second;
 }
 
-histogram::iterator pz_get_best_sequence(histogram& h) {
+histogram::iterator pz_get_best_block(histogram& h) {
 
     auto iter = std::max_element(
             h.begin(),
@@ -239,15 +219,21 @@ histogram::iterator pz_get_best_sequence(histogram& h) {
 }
 
 bool pz_trim_histogram(histogram& h) {
-    auto best = pz_get_best_sequence(h);
+
+    auto best = pz_get_best_block(h);
+
     if(best == h.end())
         return false;
+
     size_t minval = (size_t)rint(sqrt(best->second));
+
     if(minval < 2)
         minval = 2;
+
     for(auto iter = h.begin(); iter != h.end(); iter++)
         if(iter->second < minval)
             iter = prev(h.erase(iter));
+
     return true;
 }
 
@@ -285,7 +271,7 @@ size_t pz_expand_singletons(block& b, dictionary& d, metric<symbol>& sh) {
 
         if(sym >= symbol::first and sh[sym] == 1) {
 
-            const sequence& seq = d[sym];
+            const block& seq = d[sym];
 
             pos = b.erase(pos);
             pos = b.insert(pos, seq.begin(), seq.end());
@@ -308,7 +294,7 @@ size_t pz_expand_singletons(dictionary& d, metric<symbol>& sh) {
     for(auto& rule : d) {
         block b(rule.second.begin(), rule.second.end());
         n += pz_expand_singletons(b, d, sh);
-        rule.second = sequence(b.begin(), b.end());
+        rule.second = block(b.begin(), b.end());
     }
 
     return n;
@@ -350,16 +336,16 @@ metric<symbol> pz_symbol_histogram(const block& b, const dictionary& d) {
 
 void pz_expand(block& b, const dictionary& d) {
 
-    auto pos = b.begin();
+    auto iter = b.begin();
 
-    while(pos != b.end()) {
-        symbol x = *pos;
+    while(iter != b.end()) {
+        symbol x = *iter;
         const auto rule = d.find(x);
         if(rule == d.end()) {
-            pos++;
+            iter++;
         } else {
-            pos = b.erase(pos);
-            pos = b.insert(pos, rule->second.begin(), rule->second.end());
+            iter = b.erase(iter);
+            iter = b.insert(iter, rule->second.begin(), rule->second.end());
         }
     }
 }
@@ -370,11 +356,9 @@ void pz_remap(block& b, dictionary& d) {
 
     symbol current = symbol::first;
 
-    for(const auto& rule : d) {
-        if(rule.first >= symbol::first) {
+    for(const auto& rule : d)
+        if(rule.first >= symbol::first)
             remap[rule.first] = current++;
-        }
-    }
 
     for(symbol& x : b)
         if(x >= symbol::first)
@@ -385,11 +369,11 @@ void pz_remap(block& b, dictionary& d) {
     for(const auto& rule : d) {
 
         symbol x = rule.first;
-        sequence s = rule.second;
+        block s = rule.second;
 
-        for(size_t n = 0; n < s.size(); n++)
-            if(s[n] >= symbol::first)
-                s[n] = remap.at(s[n]);
+        for(auto iter = s.begin(); iter != s.end(); ++iter)
+            if(*iter >= symbol::first)
+                *iter = remap.at(*iter);
 
         e[remap.at(x)] = s;
     }
@@ -399,7 +383,7 @@ void pz_remap(block& b, dictionary& d) {
 
 bool pz_process_fd(const config&, int fdin, int) {
 
-    const size_t sequence_maxlen = 2;
+    const size_t block_maxlen = 2;
 
     symbol current_symbol = symbol::first;
 
@@ -422,7 +406,7 @@ bool pz_process_fd(const config&, int fdin, int) {
 
         for(;;) {
 
-            histogram h = pz_get_histogram(b, sequence_maxlen);
+            histogram h = pz_get_histogram(b, block_maxlen);
 
             if(not pz_trim_histogram(h))
                 break;
@@ -431,7 +415,7 @@ bool pz_process_fd(const config&, int fdin, int) {
 
             while(next(bpos) != b.end()) {
 
-                const sequence x = { *bpos, *next(bpos) };
+                const block x = { *bpos, *next(bpos) };
 
                 auto jter = h.find(x);
 
@@ -453,7 +437,7 @@ bool pz_process_fd(const config&, int fdin, int) {
                         s = kter->second;
                     }
 
-                    bpos = pz_erase_sequence(b, bpos, x);
+                    bpos = pz_erase_block(b, bpos, x);
                     bpos = b.insert(bpos, s);
                 }
             }
@@ -495,14 +479,15 @@ bool pz_process_fd(const config&, int fdin, int) {
                 throw std::runtime_error("FUCKED!");
         }
 
-        return true;
     } else {
 
         for(const auto& rule : d) {
+
             write_utf8((unsigned int)rule.first);
             write_utf8(rule.second.size());
-            for(size_t n = 0; n < rule.second.size(); n++)
-                write_utf8((unsigned int)rule.second[n]);
+
+            for(symbol x : rule.second)
+                write_utf8((unsigned int)x);
         }
 
         for(symbol x : b)
@@ -606,8 +591,6 @@ bool pz_process_file(const config& cfg, const char *filenamein) {
 }
 
 int main(int argc, char **argv) {
-
-	int opt;
 
 	config cfg;
 
