@@ -78,6 +78,7 @@ template <typename T> histogram pz_get_histogram(const T&, size_t);
 size_t pz_bytes_used(const histogram::value_type&);
 histogram::iterator pz_get_best_sequence(histogram&);
 meta<block> pz_get_block(int);
+metric<symbol> pz_symbol_histogram(const block&, const dictionary&);
 
 struct config {
 
@@ -333,7 +334,7 @@ size_t pz_expand_singletons(block& b, dictionary& d, metric<symbol>& sh) {
 
         const symbol sym = *pos;
 
-        if(sh[sym] == 1) {
+        if(sym >= symbol::first and sh[sym] == 1) {
 
             const sequence& seq = d[sym];
 
@@ -382,6 +383,71 @@ void write_utf8(unsigned int code_point) {
     }
 }
 
+metric<symbol> pz_symbol_histogram(const block& b, const dictionary& d) {
+
+    metric<symbol> h;
+
+    for(symbol x : b)
+        if(x >= symbol::first)
+            h[x]++;
+
+    for(const auto& r : d)
+        for(symbol x : r.second)
+            if(x >= symbol::first)
+                h[x]++;
+
+    return h;
+}
+
+void pz_expand(block& b, const dictionary& d) {
+
+    auto pos = b.begin();
+
+    while(pos != b.end()) {
+        symbol x = *pos;
+        const auto rule = d.find(x);
+        if(rule == d.end()) {
+            pos++;
+        } else {
+            pos = b.erase(pos);
+            pos = b.insert(pos, rule->second.begin(), rule->second.end());
+        }
+    }
+}
+
+void pz_remap(block& b, dictionary& d) {
+
+    std::map<symbol,symbol> remap;
+
+    symbol current = symbol::first;
+
+    for(const auto& rule : d) {
+        if(rule.first >= symbol::first) {
+            remap[rule.first] = current;
+            current += 1;
+        }
+    }
+
+    for(symbol& x : b)
+        if(x >= symbol::first)
+            x = remap.at(x);
+
+    dictionary e;
+
+    for(const auto& rule : d) {
+
+        symbol x = rule.first;
+        sequence s = rule.second;
+
+        for(size_t n = 0; n < s.size(); n++)
+            if(s[n] >= symbol::first)
+                s[n] = remap.at(s[n]);
+
+        e[remap.at(x)] = s;
+    }
+
+    d = e;
+}
 
 bool pz_process_fd(const config&, int fdin, int) {
 
@@ -399,121 +465,102 @@ bool pz_process_fd(const config&, int fdin, int) {
     block b = mb.second;
 
     dictionary d;
-    rdictionary r;
 
-    for(int i = 0; i < 16; i++) {
+    for(int i = 0; i < 2; i++) {
 
-    std::cerr << " : " << b.size() << " symbols" << std::endl;
+        rdictionary r;
 
-    for(;;) {
+        std::cerr << " : " << b.size() << " symbols" << std::endl;
 
-        histogram h = pz_get_histogram(b, sequence_maxlen);
+        for(;;) {
 
-        if(not pz_trim_histogram(h))
-            break;
+            histogram h = pz_get_histogram(b, sequence_maxlen);
 
-        auto bpos = b.begin();
+            if(not pz_trim_histogram(h))
+                break;
 
-        while(next(bpos) != b.end()) {
+            auto bpos = b.begin();
 
-            const sequence x = { *bpos, *next(bpos) };
+            while(next(bpos) != b.end()) {
 
-            auto jter = h.find(x);
+                const sequence x = { *bpos, *next(bpos) };
 
-            if(jter == h.end()) {
-                bpos++;
-            } else {
+                auto jter = h.find(x);
 
-                symbol s;
-                auto kter = r.find(x);
-
-                if(kter == r.end()) {
-
-                    s = current_symbol;
-                    d[current_symbol] = x;
-                    r[x] = current_symbol;
-                    current_symbol += 1;
-
+                if(jter == h.end()) {
+                    bpos++;
                 } else {
 
-                    s = kter->second;
-                }
+                    symbol s;
+                    auto kter = r.find(x);
 
-                bpos = pz_erase_sequence(b, bpos, x);
-                bpos = b.insert(bpos, s);
+                    if(kter == r.end()) {
+
+                        s = current_symbol;
+                        d[current_symbol] = x;
+                        r[x] = current_symbol;
+                        current_symbol += 1;
+
+                    } else {
+
+                        s = kter->second;
+                    }
+
+                    bpos = pz_erase_sequence(b, bpos, x);
+                    bpos = b.insert(bpos, s);
+                }
             }
+
+            std::cerr << "document: " << b.size() << " symbols ~ ";
+            std::cerr << "dictionary: " << d.size() << " symbols" << std::endl;
+        }
+
+        auto sh1 = pz_symbol_histogram(b,d);
+
+        pz_expand_singletons(b, d, sh1);
+        pz_expand_singletons(d, sh1);
+
+        auto sh2 = pz_symbol_histogram(b,d);
+
+        auto iter = d.begin();
+
+        while(iter != d.end()) {
+            if(sh2.find(iter->first) == sh2.end())
+                iter = d.erase(iter);
+            else
+                iter++;
         }
 
         std::cerr << "document: " << b.size() << " symbols ~ ";
         std::cerr << "dictionary: " << d.size() << " symbols" << std::endl;
     }
 
-    metric<symbol> symbol_histogram;
+    pz_remap(b, d);
 
-    symbol_histogram.clear();
+    if(false) {
 
-    for(symbol x : b)
-        symbol_histogram[x]++;
+        pz_expand(b,d);
 
-    for(const auto& rule : d)
-        for(size_t n = 0; n < rule.second.size(); n++)
-            symbol_histogram[rule.second[n]]++;
-
-    pz_expand_singletons(b, d, symbol_histogram);
-    pz_expand_singletons(d, symbol_histogram);
-
-    for(const auto& x : symbol_histogram)
-        if(x.second == 1)
-            d.erase(x.first);
-
-    /*
-
-    std::map<symbol,symbol> remap;
-
-    for(symbol s = symbol::wildcard; s < symbol::first; s += 1)
-        remap[s] = s;
-
-    symbol current = symbol::first;
-
-    for(const auto& rule : d) {
-        if(rule.first >= symbol::first) {
-            remap[rule.first] = current;
-            current += 1;
+        for(symbol x : b) {
+            if(x >= (symbol)0 and x < symbol::first)
+                putchar((char)x);
+            else
+                throw std::runtime_error("FUCKED!");
         }
+
+        return true;
+    } else {
+
+        for(const auto& rule : d) {
+            write_utf8((unsigned int)rule.first);
+            write_utf8(rule.second.size());
+            for(size_t n = 0; n < rule.second.size(); n++)
+                write_utf8((unsigned int)rule.second[n]);
+        }
+
+        for(symbol x : b)
+            write_utf8((unsigned int)x);
     }
-
-    for(symbol& x : b)
-        x = remap.at(x);
-
-    dictionary e;
-
-    for(const auto& rule : d) {
-
-        symbol x = rule.first;
-        sequence s = rule.second;
-
-        for(size_t n = 0; n < s.size(); n++)
-            s[n] = remap.at(s[n]);
-
-        e[remap.at(x)] = s;
-    }
-
-    d = e;
-    */
-
-    std::cerr << "document: " << b.size() << " symbols ~ ";
-    std::cerr << "dictionary: " << d.size() << " symbols" << std::endl;
-    }
-
-    for(const auto& rule : d) {
-        write_utf8((unsigned int)rule.first);
-        write_utf8(rule.second.size());
-        for(size_t n = 0; n < rule.second.size(); n++)
-            write_utf8((unsigned int)rule.second[n]);
-    }
-
-    for(symbol x : b)
-        write_utf8((unsigned int)x);
 
     return true;
 }
