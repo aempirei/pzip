@@ -24,6 +24,7 @@
 #include <vector>
 #include <map>
 #include <algorithm>
+#include <set>
 
 extern "C" {
 #include <unistd.h>
@@ -43,6 +44,8 @@ using block = std::list<symbol>;
 using histogram = metric<block>;
 using dictionary = std::map<symbol,block>;
 using rdictionary = std::map<block,symbol>;
+using dictionary_rule = dictionary::value_type;
+using measurement = histogram::value_type;
 
 const char *pz_extension = ".pz";
 
@@ -61,8 +64,6 @@ template <typename T> typename T::iterator pz_replace_next_block(T&, typename T:
 template <typename T> int pz_replace_block(T&, const block&, symbol);
 template <typename T> histogram pz_get_histogram(const T&, size_t);
 
-size_t pz_bytes_used(const histogram::value_type&);
-histogram::iterator pz_get_best_block(histogram&);
 meta<block> pz_get_block(int);
 metric<symbol> pz_symbol_histogram(const block&, const dictionary&);
 
@@ -195,46 +196,6 @@ template <typename T> histogram pz_get_histogram(const T& b, size_t maxlen) {
 	}
 
 	return h;
-}
-
-size_t pz_bytes_used(const histogram::value_type& kv) {
-
-    size_t n = 0;
-    for(auto x : kv.first)
-        if(x != symbol::wildcard)
-            n++;
-
-    return n * kv.second;
-}
-
-histogram::iterator pz_get_best_block(histogram& h) {
-
-    auto iter = std::max_element(
-            h.begin(),
-            h.end(),
-            [] (histogram::value_type a, histogram::value_type b) -> bool { return pz_bytes_used(b) > pz_bytes_used(a); }
-            );
-
-    return ( iter != h.end() and iter->second > 1 ) ? iter : h.end();
-}
-
-bool pz_trim_histogram(histogram& h) {
-
-    auto best = pz_get_best_block(h);
-
-    if(best == h.end())
-        return false;
-
-    size_t minval = (size_t)rint(sqrt(best->second));
-
-    if(minval < 2)
-        minval = 2;
-
-    for(auto iter = h.begin(); iter != h.end(); iter++)
-        if(iter->second < minval)
-            iter = prev(h.erase(iter));
-
-    return true;
 }
 
 meta<block> pz_get_block(int fd) {
@@ -381,9 +342,32 @@ void pz_remap(block& b, dictionary& d) {
     d = e;
 }
 
-bool pz_process_fd(const config&, int fdin, int) {
+std::set<block> pz_get_ngrams(const block& b) {
 
     const size_t block_maxlen = 2;
+    const size_t multiplicity = 4;
+
+    auto measurement_comparison = [](const measurement& a, const measurement& b) -> bool {
+        return b.second > a.second;
+    };
+
+    auto h = pz_get_histogram(b, block_maxlen);
+
+    const auto& max_measurement = std::max_element(h.begin(), h.end(), measurement_comparison);
+
+    if(max_measurement == h.end() or max_measurement->second < multiplicity)
+        return std::set<block>();
+
+    std::set<block> ngrams;
+
+    for(const auto& m : h)
+        if(m.second >= multiplicity)
+            ngrams.insert(m.first);
+
+    return ngrams;
+}
+
+bool pz_process_fd(const config&, int fdin, int fdout) {
 
     symbol current_symbol = symbol::first;
 
@@ -398,101 +382,115 @@ bool pz_process_fd(const config&, int fdin, int) {
 
     dictionary d;
 
-    for(int i = 0; i < 2; i++) {
+    rdictionary r;
 
-        rdictionary r;
+    std::cerr << " : " << b.size() << " symbols" << std::endl;
 
-        std::cerr << " : " << b.size() << " symbols" << std::endl;
+    std::set<block> ngrams;
 
-        for(;;) {
+    while(not (ngrams = pz_get_ngrams(b)).empty()) {
 
-            histogram h = pz_get_histogram(b, block_maxlen);
+        auto bpos = b.begin();
 
-            if(not pz_trim_histogram(h))
-                break;
+        while(next(bpos) != b.end()) {
 
-            auto bpos = b.begin();
+            const block x = { *bpos, *next(bpos) };
 
-            while(next(bpos) != b.end()) {
+            if(ngrams.find(x) == ngrams.end()) {
 
-                const block x = { *bpos, *next(bpos) };
+                bpos++;
 
-                auto jter = h.find(x);
+            } else {
 
-                if(jter == h.end()) {
-                    bpos++;
+                symbol s;
+                auto kter = r.find(x);
+
+                if(kter == r.end()) {
+
+                    s = current_symbol;
+                    d[current_symbol] = x;
+                    r[x] = current_symbol++;
+
                 } else {
 
-                    symbol s;
-                    auto kter = r.find(x);
-
-                    if(kter == r.end()) {
-
-                        s = current_symbol;
-                        d[current_symbol] = x;
-                        r[x] = current_symbol++;
-
-                    } else {
-
-                        s = kter->second;
-                    }
-
-                    bpos = pz_erase_block(b, bpos, x);
-                    bpos = b.insert(bpos, s);
+                    s = kter->second;
                 }
+
+                bpos = pz_erase_block(b, bpos, x);
+                bpos = b.insert(bpos, s);
             }
-
-            std::cerr << "document: " << b.size() << " symbols ~ ";
-            std::cerr << "dictionary: " << d.size() << " symbols" << std::endl;
-        }
-
-        auto sh1 = pz_symbol_histogram(b,d);
-
-        pz_expand_singletons(b, d, sh1);
-        pz_expand_singletons(d, sh1);
-
-        auto sh2 = pz_symbol_histogram(b,d);
-
-        auto iter = d.begin();
-
-        while(iter != d.end()) {
-            if(sh2.find(iter->first) == sh2.end())
-                iter = d.erase(iter);
-            else
-                iter++;
         }
 
         std::cerr << "document: " << b.size() << " symbols ~ ";
         std::cerr << "dictionary: " << d.size() << " symbols" << std::endl;
     }
 
+    auto sh1 = pz_symbol_histogram(b,d);
+
+    pz_expand_singletons(b, d, sh1);
+    pz_expand_singletons(d, sh1);
+
+    auto sh2 = pz_symbol_histogram(b,d);
+
+    auto iter = d.begin();
+
+    while(iter != d.end()) {
+        if(sh2.find(iter->first) == sh2.end())
+            iter = d.erase(iter);
+        else
+            iter++;
+    }
+
+    std::cerr << "document: " << b.size() << " symbols ~ ";
+    std::cerr << "dictionary: " << d.size() << " symbols" << std::endl;
+
     pz_remap(b, d);
 
-    if(false) {
+    //
+    // output
+    //
 
-        pz_expand(b,d);
+    auto rule_comparison = [](const dictionary_rule& a, const dictionary_rule& b) {
+        return b.first > a.first;
+    };
 
-        for(symbol x : b) {
-            if(x >= (symbol)0 and x < symbol::first)
-                putchar((char)x);
-            else
-                throw std::runtime_error("FUCKED!");
+    const auto& max_rule = std::max_element(d.begin(), d.end(), rule_comparison);
+
+    if(max_rule->first >= symbol::max_16bit)
+        throw std::runtime_error("maximum symbol too big for now.");
+
+    for(const dictionary_rule& rule : d) {
+
+        uint16_t x = (uint16_t)rule.first;
+        int16_t y = (int16_t)symbol::wildcard;
+
+        if(write(fdout, &x, sizeof(x)) != sizeof(x))
+            throw std::runtime_error("write(rule.first) failed");
+
+        for(symbol s : rule.second) {
+            x = (uint16_t)s;
+            if(write(fdout, &x, sizeof(x)) != sizeof(x))
+                throw std::runtime_error("write(rule.second) failed");
         }
 
-    } else {
-
-        for(const auto& rule : d) {
-
-            write_utf8((unsigned int)rule.first);
-            write_utf8(rule.second.size());
-
-            for(symbol x : rule.second)
-                write_utf8((unsigned int)x);
-        }
-
-        for(symbol x : b)
-            write_utf8((unsigned int)x);
+        if(write(fdout, &y, sizeof(y)) != sizeof(y))
+            throw std::runtime_error("write(symbol::wildcard) failed");
     }
+
+    for(symbol s : b) {
+        uint16_t x = (uint16_t)s;
+        if(write(fdout, &x, sizeof(x)) != sizeof(x))
+            throw std::runtime_error("write(block) failed");
+    }
+
+    //
+    // test correctness
+    //
+
+    pz_expand(b,d);
+
+    if(b != mb.second)
+        throw std::runtime_error("1st expansion test failed.");
 
     return true;
 }

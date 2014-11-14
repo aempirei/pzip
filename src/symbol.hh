@@ -1,9 +1,12 @@
 #pragma once
 
 enum struct symbol : int {
-    wildcard  =  -1,
-    ascii_min =   0,
-    ascii_max = 255,
+    wildcard  = -1,
+    min_ascii = '\0',
+    max_ascii = '\xff',
+    max_7bit  = (1<< 7)-1,
+    max_8bit  = (1<< 8)-1,
+    max_16bit = (1<<16)-1,
     first     = 256
 };
 
