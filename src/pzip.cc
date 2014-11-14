@@ -261,6 +261,25 @@ size_t pz_expand_singletons(dictionary& d, metric<symbol>& sh) {
     return n;
 }
 
+size_t pz_expand_singletons(block& b, dictionary& d) {
+    auto sh = pz_symbol_histogram(b,d);
+    return pz_expand_singletons(b, d, sh) + pz_expand_singletons(d, sh);
+}
+
+void pz_trim_dictionary(const block& b, dictionary& d) {
+
+    auto sh = pz_symbol_histogram(b,d);
+
+    auto iter = d.begin();
+
+    while(iter != d.end()) {
+        if(sh.find(iter->first) == sh.end())
+            iter = d.erase(iter);
+        else
+            iter++;
+    }
+}
+
 void write_utf8(unsigned int code_point) {
     if (code_point < 0x80) {
         putchar(code_point);
@@ -436,21 +455,12 @@ bool pz_process_fd(const config&, int fdin, int fdout) {
         print_info(b, d);
     }
 
-    auto sh1 = pz_symbol_histogram(b,d);
+    pz_expand_singletons(b, d);
+    pz_trim_dictionary(b, d);
 
-    pz_expand_singletons(b, d, sh1);
-    pz_expand_singletons(d, sh1);
-
-    auto sh2 = pz_symbol_histogram(b,d);
-
-    auto iter = d.begin();
-
-    while(iter != d.end()) {
-        if(sh2.find(iter->first) == sh2.end())
-            iter = d.erase(iter);
-        else
-            iter++;
-    }
+    //
+    // erase unused rules
+    //
 
     pz_remap(b, d);
 
