@@ -6,6 +6,7 @@ enum struct symbol : int {
     max_ascii = '\xff',
     max_7bit  = (1<< 7)-1,
     max_8bit  = (1<< 8)-1,
+    max_15bit = (1<<15)-1,
     max_16bit = (1<<16)-1,
     first     = 256
 };

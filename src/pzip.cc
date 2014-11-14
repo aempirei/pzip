@@ -68,134 +68,134 @@ meta<block> pz_get_block(int);
 metric<symbol> pz_symbol_histogram(const block&, const dictionary&);
 
 const static std::map<unsigned int, const char *> file_type = {
-	{ S_IFBLK,  "block device" }, 
-	{ S_IFCHR,  "character device" }, 
-	{ S_IFDIR,  "directory" }, 
-	{ S_IFIFO,  "FIFO/pipe" }, 
-	{ S_IFLNK,  "symlink" }, 
-	{ S_IFREG,  "regular file" }, 
-	{ S_IFSOCK, "socket" }
+    { S_IFBLK,  "block device" },
+    { S_IFCHR,  "character device" },
+    { S_IFDIR,  "directory" },
+    { S_IFIFO,  "FIFO/pipe" },
+    { S_IFLNK,  "symlink" },
+    { S_IFREG,  "regular file" },
+    { S_IFSOCK, "socket" }
 };
 
 const char *get_file_type(const struct stat& sb) {
 
-	unsigned int mode = sb.st_mode &  S_IFMT;
-	auto iter = file_type.find(mode);
+    unsigned int mode = sb.st_mode &  S_IFMT;
+    auto iter = file_type.find(mode);
 
-	if(iter == file_type.end())
-		return "unknown";
+    if(iter == file_type.end())
+        return "unknown";
 
-	return iter->second;
+    return iter->second;
 }
 
 bool pz_compare_symbols(symbol a, symbol b) {
-	return a == b or a == symbol::wildcard or b == symbol::wildcard;
+    return a == b or a == symbol::wildcard or b == symbol::wildcard;
 }
 
 template <class T> bool pz_match_block(T begin, T end, const block& s) {
 
-	auto ster = s.begin();
-	auto bter = begin;
+    auto ster = s.begin();
+    auto bter = begin;
 
-	while(ster != s.end())
-		if(bter == end or not pz_compare_symbols(*ster++, *bter++))
-			return false;
-	
-	return true;
+    while(ster != s.end())
+        if(bter == end or not pz_compare_symbols(*ster++, *bter++))
+            return false;
+
+    return true;
 }
 
 template <class T> T pz_find_block(T begin, T end, const block& s) {
 
-	for(auto position = begin; position != end; ++position)
-		if(pz_match_block(position, end, s))
-			return position;
+    for(auto position = begin; position != end; ++position)
+        if(pz_match_block(position, end, s))
+            return position;
 
-	return end;
+    return end;
 }
 
 template <typename T> typename T::iterator pz_erase_block(T& b, typename T::iterator pos, const block& s) {
 
-	auto bter = pos--;
-	
-	for(auto ster = s.begin(); ster != s.end(); ster++) {
+    auto bter = pos--;
 
-		if(bter == b.end())
-			throw std::runtime_error("pz_erase_block(): unexpectedly read past last element in object");
-		
-		auto cter = bter++;
+    for(auto ster = s.begin(); ster != s.end(); ster++) {
 
-		if(*ster == symbol::wildcard) {
-			// do nothing
-		} else if(*cter == *ster) {
-			b.erase(cter);
-		} else {
-			throw std::runtime_error("pz_erase_block(): unexpectedly read past last element in object");
-		}
-	}
+        if(bter == b.end())
+            throw std::runtime_error("pz_erase_block(): unexpectedly read past last element in object");
 
-	return ++pos;
+        auto cter = bter++;
+
+        if(*ster == symbol::wildcard) {
+            // do nothing
+        } else if(*cter == *ster) {
+            b.erase(cter);
+        } else {
+            throw std::runtime_error("pz_erase_block(): unexpectedly read past last element in object");
+        }
+    }
+
+    return ++pos;
 }
 
 template <typename T> typename T::iterator pz_replace_next_block(T& b, typename T::iterator pos, const block& s, symbol x) {
 
-	pos = pz_find_block(pos, b.end(), s);
+    pos = pz_find_block(pos, b.end(), s);
 
-	if(pos != b.end()) {
-		pos = pz_erase_block(b, pos, s);
-		pos = b.insert(pos, x);
-	}
+    if(pos != b.end()) {
+        pos = pz_erase_block(b, pos, s);
+        pos = b.insert(pos, x);
+    }
 
-	return pos;
+    return pos;
 }
 
 template <typename T> int pz_replace_block(T& b, const block& s, symbol x) {
 
-	int n = 0;
+    int n = 0;
 
-	auto position = b.begin();
+    auto position = b.begin();
 
-	while((position = pz_replace_next_block(b, position, s, x)) != b.end())
-		n++;
+    while((position = pz_replace_next_block(b, position, s, x)) != b.end())
+        n++;
 
-	return n;
+    return n;
 }
 
 template <typename T> histogram pz_get_histogram(const T& b, size_t maxlen) {
 
 
-	histogram h;
+    histogram h;
 
-	for(auto iter = b.begin(); iter != b.end(); iter++) {
+    for(auto iter = b.begin(); iter != b.end(); iter++) {
 
 
-		const size_t minlen1 = 3;
-		block key1;
+        const size_t minlen1 = 3;
+        block key1;
 
-		for(auto jter = iter; jter != b.end() and key1.size() < maxlen; jter++) {
+        for(auto jter = iter; jter != b.end() and key1.size() < maxlen; jter++) {
 
-			key1.push_back(*jter);
+            key1.push_back(*jter);
 
-			if(key1.size() >= minlen1)
-				h[key1]++;
-		}
+            if(key1.size() >= minlen1)
+                h[key1]++;
+        }
 
-		const size_t minlen2 = 2;
-		block key2;
+        const size_t minlen2 = 2;
+        block key2;
 
-		key2.push_back(*iter);
+        key2.push_back(*iter);
 
-		for(auto jter = next(iter); jter != b.end() and key2.size() < maxlen; jter++) {
+        for(auto jter = next(iter); jter != b.end() and key2.size() < maxlen; jter++) {
 
-			key2.push_back(*jter);
+            key2.push_back(*jter);
 
-			if(key2.size() >= minlen2)
-				h[key2]++;
+            if(key2.size() >= minlen2)
+                h[key2]++;
 
-			key2.back() = symbol::wildcard;
-		}
-	}
+            key2.back() = symbol::wildcard;
+        }
+    }
 
-	return h;
+    return h;
 }
 
 meta<block> pz_get_block(int fd) {
@@ -247,7 +247,7 @@ size_t pz_expand_singletons(block& b, dictionary& d, metric<symbol>& sh) {
 
     return n;
 }
- 
+
 size_t pz_expand_singletons(dictionary& d, metric<symbol>& sh) {
 
     size_t n = 0;
@@ -369,6 +369,18 @@ std::set<block> pz_get_ngrams(const block& b) {
 
 bool pz_process_fd(const config&, int fdin, int fdout) {
 
+    auto print_info = [](const block& bl, const dictionary& di) {
+
+        size_t k = 0;
+
+        for(const auto& r : di)
+            k += r.second.size() + 1;
+
+        std::cerr << "document: " << bl.size() << " symbols ~ ";
+        std::cerr << "dictionary: " << di.size() << " rules ";
+        std::cerr << k << " symbols = " << (k + bl.size()) << " total symbols" << std::endl;
+    };
+
     symbol current_symbol = symbol::first;
 
     meta<block> mb = pz_get_block(fdin);
@@ -421,8 +433,7 @@ bool pz_process_fd(const config&, int fdin, int fdout) {
             }
         }
 
-        std::cerr << "document: " << b.size() << " symbols ~ ";
-        std::cerr << "dictionary: " << d.size() << " symbols" << std::endl;
+        print_info(b, d);
     }
 
     auto sh1 = pz_symbol_histogram(b,d);
@@ -441,10 +452,9 @@ bool pz_process_fd(const config&, int fdin, int fdout) {
             iter++;
     }
 
-    std::cerr << "document: " << b.size() << " symbols ~ ";
-    std::cerr << "dictionary: " << d.size() << " symbols" << std::endl;
-
     pz_remap(b, d);
+
+    print_info(b, d);
 
     //
     // output
@@ -497,120 +507,120 @@ bool pz_process_fd(const config&, int fdin, int fdout) {
 
 bool pz_process_file(const config& cfg, const char *filenamein) {
 
-	int fdin;
-	int fdout;
-	struct stat sb;
+    int fdin;
+    int fdout;
+    struct stat sb;
 
-	std::cerr << std::setw(12) << filenamein << ": ";
+    std::cerr << std::setw(12) << filenamein << ": ";
 
-	if(lstat(filenamein, &sb) == -1) {
-		std::cerr << strerror(errno) << std::endl;
-		return false;
-	}
+    if(lstat(filenamein, &sb) == -1) {
+        std::cerr << strerror(errno) << std::endl;
+        return false;
+    }
 
-	if(S_ISDIR(sb.st_mode)) {
-		std::cerr << "ignoring directory" << std::endl;
-		return false;
-	}
+    if(S_ISDIR(sb.st_mode)) {
+        std::cerr << "ignoring directory" << std::endl;
+        return false;
+    }
 
-	if(cfg.stdoutput) {
+    if(cfg.stdoutput) {
 
-		// if output is standard output then
-		// input type doesnt matter 
-		// as long as it can be read
+        // if output is standard output then
+        // input type doesnt matter
+        // as long as it can be read
 
-		fdout = STDOUT_FILENO;
+        fdout = STDOUT_FILENO;
 
-	} else {
+    } else {
 
-		// if output is not standard output
-		// then only compress regular files
+        // if output is not standard output
+        // then only compress regular files
 
-		if(not S_ISREG(sb.st_mode)) {
-			std::cerr << "ignoring " << get_file_type(sb) << std::endl;
-			return false;
-		}
+        if(not S_ISREG(sb.st_mode)) {
+            std::cerr << "ignoring " << get_file_type(sb) << std::endl;
+            return false;
+        }
 
-		// if output is not standard output
-		// then make sure the filenamein suffix
-		// matches the mode of operation
+        // if output is not standard output
+        // then make sure the filenamein suffix
+        // matches the mode of operation
 
-		const size_t extension_sz = strlen(pz_extension);
-		const size_t filenamein_sz = strlen(filenamein);
+        const size_t extension_sz = strlen(pz_extension);
+        const size_t filenamein_sz = strlen(filenamein);
 
-		const char *p = filenamein + filenamein_sz;
+        const char *p = filenamein + filenamein_sz;
 
-		std::string filenameout(filenamein);
+        std::string filenameout(filenamein);
 
-		if(extension_sz < filenamein_sz)
-			p -= extension_sz;
+        if(extension_sz < filenamein_sz)
+            p -= extension_sz;
 
-		if(strcmp(p, pz_extension) == 0) {
-			if(cfg.compress) {
-				std::cerr << "already has " << pz_extension << " suffix -- ignored" << std::endl;
-				return false;
-			}
-			filenameout.erase(filenameout.end() - extension_sz, filenameout.end());
-		} else {
-			if(not cfg.compress) {
-				std::cerr << "unknown suffix -- ignored" << std::endl;
-				return false;
+        if(strcmp(p, pz_extension) == 0) {
+            if(cfg.compress) {
+                std::cerr << "already has " << pz_extension << " suffix -- ignored" << std::endl;
+                return false;
+            }
+            filenameout.erase(filenameout.end() - extension_sz, filenameout.end());
+        } else {
+            if(not cfg.compress) {
+                std::cerr << "unknown suffix -- ignored" << std::endl;
+                return false;
 
-			}
-			filenameout += pz_extension;
-		}
+            }
+            filenameout += pz_extension;
+        }
 
-		std::cerr << "=> " << filenameout;
+        std::cerr << "=> " << filenameout;
 
-		fdout = open(filenameout.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0664);
-		if(fdout == -1) {
-			std::cerr << strerror(errno) << std::endl;
-			return false;
-		}
-	}
+        fdout = open(filenameout.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0664);
+        if(fdout == -1) {
+            std::cerr << strerror(errno) << std::endl;
+            return false;
+        }
+    }
 
-	fdin = open(filenamein, O_RDONLY);
-	if(fdin == -1) {
-		std::cerr << strerror(errno) << std::endl;
-		if(fdout != STDOUT_FILENO)
-			close(fdout);
-		return false;
-	}
+    fdin = open(filenamein, O_RDONLY);
+    if(fdin == -1) {
+        std::cerr << strerror(errno) << std::endl;
+        if(fdout != STDOUT_FILENO)
+            close(fdout);
+        return false;
+    }
 
-	pz_process_fd(cfg, fdin, fdout);
+    pz_process_fd(cfg, fdin, fdout);
 
-	std::cerr << std::endl;
+    std::cerr << std::endl;
 
-	close(fdin);
-	if(fdout != STDOUT_FILENO)
-		close(fdout);
+    close(fdin);
+    if(fdout != STDOUT_FILENO)
+        close(fdout);
 
-	return true;
+    return true;
 }
 
 int main(int argc, char **argv) {
 
-	config cfg;
+    config cfg;
 
-        if(not cfg.getopt(argc, argv)) {
-            std::cerr << "Try `" << *argv << " -h' for more information." << std::endl;
-            return -1;
-        }
+    if(not cfg.getopt(argc, argv)) {
+        std::cerr << "Try `" << *argv << " -h' for more information." << std::endl;
+        return -1;
+    }
 
-	if(cfg.help) {
-		cfg.usage(*argv);
-		return 0;
-	}
+    if(cfg.help) {
+        cfg.usage(*argv);
+        return 0;
+    }
 
-	if(cfg.files.empty()) {
+    if(cfg.files.empty()) {
 
-		pz_process_fd(cfg, STDIN_FILENO, STDOUT_FILENO);
+        pz_process_fd(cfg, STDIN_FILENO, STDOUT_FILENO);
 
-	} else { 
+    } else {
 
-		for(auto file : cfg.files)
-			pz_process_file(cfg, file.c_str());
-	}
+        for(auto file : cfg.files)
+            pz_process_file(cfg, file.c_str());
+    }
 
-	return 0;
+    return 0;
 }
