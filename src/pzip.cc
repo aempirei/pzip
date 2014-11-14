@@ -413,9 +413,9 @@ bool pz_process_fd(const config&, int fdin, int fdout) {
 
     dictionary d;
 
-    rdictionary r;
-
     std::cerr << " : " << b.size() << " symbols" << std::endl;
+
+    rdictionary r;
 
     std::set<block> ngrams;
 
@@ -457,13 +457,7 @@ bool pz_process_fd(const config&, int fdin, int fdout) {
 
     pz_expand_singletons(b, d);
     pz_trim_dictionary(b, d);
-
-    //
-    // erase unused rules
-    //
-
     pz_remap(b, d);
-
     print_info(b, d);
 
     //
