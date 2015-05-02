@@ -2,7 +2,7 @@ CXX = g++
 CPPFLAGS = -Isrc
 CXXFLAGS = -Wall -W -pedantic -std=gnu++11 -O3
 LIBFLAGS = -Llib -lpz
-TARGETS = lib/libpz.a bin/pzip
+TARGETS = lib/libpz.a bin/pzip bin/qzip
 INSTALL_PATH = /usr/local
 
 .PHONY: all clean install test library esl
@@ -25,13 +25,17 @@ test: $(TARGETS)
 
 library: lib/libpz.a
 
-lib/libpz.a: src/libpz.o src/config.o
+lib/libpz.a: src/libpz.o
 	if [ ! -d lib ]; then mkdir -vp lib; fi
 	ar crfv $@ $^ 
 
-bin/pzip: src/pzip.o lib/libpz.a
+bin/pzip: src/pzip.o src/config.o lib/libpz.a
 	if [ ! -d bin ]; then mkdir -vp bin; fi
-	$(CXX) $(CXXFLAGS) -o $@ $< $(LIBFLAGS)
+	$(CXX) $(CXXFLAGS) -o $@ $+
+
+bin/qzip: src/qzip.o src/config.o
+	if [ ! -d bin ]; then mkdir -vp bin; fi
+	$(CXX) $(CXXFLAGS) -o $@ $+
 
 esl: bin/esl
 
