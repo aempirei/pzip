@@ -34,16 +34,18 @@ extern "C" {
 }
 
 #include <config.hh>
+#include <arithmetic.hh>
+
+arithmetic(symbol,uint16_t);
+using runlength = uint16_t;
 
 struct run;
+struct rlestring;
 
 template <typename T> using meta = std::pair<bool, T>;
-template <typename T> using metric = std::map<T,size_t>;
+template <typename T> using metric = std::map<T,std::size_t>;
 
-using runlength = uint16_t;
-using symbol = uint16_t;
-
-constexpr std::size_t blocksize = 1L << (std::numeric_limits<runlength>::digits + std::numeric_limits<symbol>::digits);
+constexpr std::size_t blocksize = ordinality(runlength()) * ordinality(symbol());
 
 using _run = std::pair<runlength,symbol>;
 struct run : _run {
@@ -52,7 +54,11 @@ struct run : _run {
 	}
 };
 
-using rlestring = std::basic_string<run>;
+using _rlestring = std::basic_string<run>;
+struct rlestring : _rlestring {
+	using _rlestring::_rlestring;
+};
+
 using histogram = metric<rlestring>;
 using dictionary = std::map<symbol,rlestring>;
 using rdictionary = std::map<rlestring,symbol>;
