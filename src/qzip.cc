@@ -34,19 +34,32 @@ extern "C" {
 }
 
 #include <config.hh>
-#include <symbol.hh>
+
+struct run;
 
 template <typename T> using meta = std::pair<bool, T>;
 template <typename T> using metric = std::map<T,size_t>;
 
-using block = std::list<symbol>;
-using histogram = metric<block>;
-using dictionary = std::map<symbol,block>;
-using rdictionary = std::map<block,symbol>;
+using runlength = uint16_t;
+using symbol = uint16_t;
+
+constexpr std::size_t blocksize = 1L << (std::numeric_limits<runlength>::digits + std::numeric_limits<symbol>::digits);
+
+using _run = std::pair<runlength,symbol>;
+struct run : _run {
+	using _run::_run;
+	run(const symbol& ch) : _run(1,ch) {
+	}
+};
+
+using rlestring = std::basic_string<run>;
+using histogram = metric<rlestring>;
+using dictionary = std::map<symbol,rlestring>;
+using rdictionary = std::map<rlestring,symbol>;
 using dictionary_rule = dictionary::value_type;
 using measurement = histogram::value_type;
 
-using run = std::pair<int32_t,symbol>;
+/*
 
 const char *qz_extension = ".qz";
 
@@ -602,6 +615,7 @@ bool qz_process_file(const config& cfg, const char *filenamein) {
 
     return true;
 }
+*/
 
 int main(int argc, char **argv) {
 
@@ -619,12 +633,14 @@ int main(int argc, char **argv) {
 
     if(cfg.files.empty()) {
 
-        qz_process_fd(cfg, STDIN_FILENO, STDOUT_FILENO);
+        // qz_process_fd(cfg, STDIN_FILENO, STDOUT_FILENO);
+		std::cout << "process stdin => stdout" << std::endl;
 
     } else {
 
         for(auto file : cfg.files)
-            qz_process_file(cfg, file.c_str());
+            std::cout << "processing file: " << file << std::endl;
+			// qz_process_file(cfg, file.c_str());
     }
 
     return 0;
