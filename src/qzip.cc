@@ -25,6 +25,7 @@
 #include <map>
 #include <algorithm>
 #include <set>
+#include <type_traits>
 
 extern "C" {
 #include <unistd.h>
@@ -48,11 +49,78 @@ template <typename T> using metric = std::map<T,std::size_t>;
 constexpr std::size_t blocksize = ordinality(runlength()) * ordinality(symbol());
 
 using _run = std::pair<runlength,symbol>;
+
 struct run : _run {
+
 	using _run::_run;
+
+	using base_type = std::underlying_type<_run::second_type>::type;
+
 	run(const symbol& ch) : _run(1,ch) {
 	}
+
+	run& operator+=(first_type x) { this->first += x; return *this; }
+	run& operator-=(first_type x) { this->first -= x; return *this; }
+
+	run& operator++() { return operator+=(1); }
+	run& operator--() { return operator-=(1); }
+
+	struct iterator : std::iterator<std::random_access_iterator_tag, _run::second_type> {
+	
+		pointer ptr;
+		difference_type pos;
+		difference_type sz;
+
+		iterator(                 ) : ptr(nullptr), pos(0    ), sz(0   ) { }
+		iterator(const iterator& r) : ptr(r.ptr  ), pos(r.pos), sz(r.sz) { }
+
+		iterator& operator=(const iterator& r) {
+			ptr = r.ptr;
+			pos = r.pos;
+			sz = r.sz;
+			return *this;
+		}
+
+		~iterator() {
+		}
+
+		difference_type operator-(const iterator& r) const {
+			return pos - r.pos;
+		}
+
+		const reference operator[](difference_type n) const {
+			return *((n >= 0 and n < sz) ? ptr : (pointer)nullptr);
+		}
+
+		const reference operator*() const {
+			return operator[](pos);
+		}
+
+		bool operator==(const iterator& r) const { return ptr == r.ptr && pos == r.pos && sz == r.sz; }
+		bool operator!=(const iterator& r) const { return ptr != r.ptr || pos != r.pos || sz != r.sz; }
+
+		iterator operator+(difference_type x) const { auto it = *this; return ( it += x ); }
+		iterator operator-(difference_type x) const { auto it = *this; return ( it -= x ); }
+
+		iterator& operator+=(difference_type x) { pos += x; return *this; }
+		iterator& operator-=(difference_type x) { pos -= x; return *this; }
+
+		iterator& operator++() { return operator+=(1); }
+		iterator& operator--() { return operator-=(1); }
+
+		iterator operator++(int) { auto it = *this; operator++(); return it; }
+		iterator operator--(int) { auto it = *this; operator--(); return it; }
+
+		bool operator<(const iterator& r) const { return pos < r.pos; }
+		bool operator>(const iterator& r) const { return pos > r.pos; }
+
+		bool operator<=(const iterator& r) const { return pos <= r.pos; }
+		bool operator>=(const iterator& r) const { return pos >= r.pos; }
+
+	};
 };
+
+
 
 using _rlestring = std::basic_string<run>;
 struct rlestring : _rlestring {
