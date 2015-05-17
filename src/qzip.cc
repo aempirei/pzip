@@ -49,9 +49,7 @@ template <typename T> using metric = std::map<T,std::size_t>;
 constexpr std::size_t blocksize = ordinality(runlength()) * ordinality(symbol());
 
 using _run = std::pair<runlength,symbol>;
-
 struct run : _run {
-
 	using _run::_run;
 
 	using base_type = std::underlying_type<_run::second_type>::type;
@@ -120,10 +118,9 @@ struct run : _run {
 	};
 };
 
-
-
 using _rlestring = std::basic_string<run>;
 struct rlestring : _rlestring {
+	using base_type = value_type::base_type;
 	using _rlestring::_rlestring;
 };
 

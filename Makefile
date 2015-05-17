@@ -1,6 +1,6 @@
 CXX = g++
 CPPFLAGS = -Isrc
-CXXFLAGS = -Wall -W -pedantic -std=gnu++11 -O3
+CXXFLAGS = -Wall -W -pedantic -std=gnu++1y -O2
 LIBFLAGS = -Llib -lpz
 TARGETS = lib/libpz.a bin/pzip bin/qzip
 INSTALL_PATH = /usr/local

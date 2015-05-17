@@ -224,18 +224,19 @@ size_t pz_expand_singletons(block& b, dictionary& d, metric<symbol>& sh) {
 
     size_t n = 0;
 
-    auto pos = b.begin();
+	auto pos = b.begin();
 
     while(pos != b.end()) {
 
-        const symbol sym = *pos;
+        auto sym = *pos;
 
         if(sym >= symbol::first and sh[sym] == 1) {
 
-            const block& seq = d[sym];
+            const auto& seq = d[sym];
 
             pos = b.erase(pos);
-            pos = b.insert(pos, seq.begin(), seq.end());
+			pos = std::prev(pos);
+            b.insert(std::next(pos), seq.cbegin(), seq.cend());
 
             n++;
 
@@ -325,7 +326,8 @@ void pz_expand(block& b, const dictionary& d) {
             iter++;
         } else {
             iter = b.erase(iter);
-            iter = b.insert(iter, rule->second.begin(), rule->second.end());
+			iter = std::prev(iter);
+            b.insert(std::next(iter), rule->second.begin(), rule->second.end());
         }
     }
 }
