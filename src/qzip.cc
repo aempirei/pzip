@@ -122,6 +122,28 @@ using _rlestring = std::basic_string<run>;
 struct rlestring : _rlestring {
 	using base_type = value_type::base_type;
 	using _rlestring::_rlestring;
+
+	struct base_iterator : std::iterator<std::bidirectional_iterator_tag, _run::second_type> {
+
+			rlestring::iterator current_run;
+			run::iterator current_base;
+
+			base_iterator() {
+			}
+
+			base_iterator(const base_iterator& r) : current_run(r.current_run), current_base(r.current_base) { 
+			}
+
+			base_iterator& operator=(const base_iterator& r) {
+					current_run = r.current_run;
+					current_base = r.current_base;
+					return *this;
+			}
+
+			~base_iterator() {
+			}
+
+	};
 };
 
 using histogram = metric<rlestring>;
