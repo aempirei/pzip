@@ -57,5 +57,8 @@ bool config::getopt(int argc, char **argv) {
     for(int i = optind; i < argc; i++)
         files.push_back(argv[i]);
 
+	if(files.empty())
+			stdoutput = true;
+
     return true;
 }

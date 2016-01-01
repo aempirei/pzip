@@ -40,6 +40,8 @@ const char *rz_extension = ".rz";
 bool rz_process_file(const config&, const char *);
 bool rz_process_fd(const config&, int, int);
 
+bool rz_compress_block(const config&, void *, size_t, int);
+
 bool rz_compress(const config&, int, int);
 bool rz_decompress(const config&, int, int);
 
@@ -64,8 +66,96 @@ const char *get_file_type(const struct stat& sb) {
 		return iter->second;
 }
 
-bool rz_compress(const config&, int, int) {
+ssize_t read_block(int fd, void *block, size_t block_sz) {
+
+		char *p = (char *)block;
+
+		ssize_t left = block_sz;
+		ssize_t done = 0;
+		ssize_t n;
+
+		while((n = read(fd, p, left)) != 0) {
+				if(n > 0) {
+						left -= n;
+						done += n;
+						p += n;
+				} else if(n == -1 && errno != EINTR) {
+						return -1;
+				}
+		}
+
+		return done;
+}
+
+constexpr char ansi_save_pos[] = "\033[s";
+constexpr char ansi_load_pos[] = "\033[u";
+constexpr char ansi_clear_line[] = "\033[K";
+
+template <typename> struct matrix;
+
+template <typename T> struct matrix {
+		using value_type = T;
+		T *data;
+		size_t width;
+		size_t height;
+		T& cell(size_t, size_t);
+		matrix(size_t, size_t);
+		T& operator()(size_t, size_t);
+		~matrix();
+};
+
+template <typename T> matrix<T>::matrix(size_t my_width, size_t my_height) : width(my_width), height(my_height) {
+		data = new T[width * height];
+}
+
+template <typename T> matrix<T>::~matrix() {
+		delete[] data;
+}
+
+template <typename T> T& matrix<T>::operator()(size_t i, size_t j) {
+		return cell(i,j);
+}
+
+template <typename T> T& matrix<T>::cell(size_t i, size_t j) {
+		return data[i + j * width];
+}
+
+bool rz_compress_block(const config&, void *block, size_t block_sz, int) {
+
+		matrix<char> m(block_sz, block_sz);
+		char *p = (char *)block;
+
+		for(size_t i = 0, j = block_sz - 1; i < block_sz; i++)
+				m(i,j) = (p[i] == p[j]);
+
+		for(size_t i = block_sz - 1, j = 0; j < block_sz; j++)
+				m(i,j) = (p[i] == p[j]);
+
+		for(ssize_t i = block_sz - 2; i >= 0; i--)
+				for(ssize_t j = block_sz - 2; j >= 0; j--)
+						m(i,j) = (p[i] == p[j]) ? m(i+1,j+1) + 1 : 0;
+
 		return false;
+}
+
+bool rz_compress(const config& cfg, int fdin, int fdout) {
+
+		constexpr size_t block_sz = (1 << 16);
+
+		char block[block_sz];
+
+		ssize_t n;
+
+		std::cerr << ansi_save_pos << ": ";
+
+		while((n = read_block(fdin, block, block_sz)) > 0) {
+				std::cerr << '.' << std::flush;
+				rz_compress_block(cfg, block, n, fdout);
+		}
+
+		std::cerr << ansi_load_pos << ansi_clear_line << std::flush;
+
+		return (n != -1);
 }
 
 bool rz_decompress(const config&, int, int) {
@@ -181,10 +271,19 @@ int main(int argc, char **argv) {
 				return 0;
 		}
 
-		if(cfg.files.empty())
+		if(cfg.stdoutput and not cfg.force) {
+				std::cerr << "compressed data not written to a terminal. Use -f to force ";
+				if(not cfg.compress)
+						std::cerr << "de";
+				std::cerr << "compression." << std::endl;
+				return -1;
+		}
+
+		if(cfg.files.empty()) {
+
 				rz_process_fd(cfg, STDIN_FILENO, STDOUT_FILENO);
 
-		else
+		} else
 				for(auto file : cfg.files)
 						rz_process_file(cfg, file.c_str());
 
