@@ -232,12 +232,20 @@ bool rz_compress_block(const config&, void *block, size_t block_sz, int) {
 				return pos;
 		};
 
+		size_t ss = 0;
+
 		for(auto pos = expr.begin(); pos != expr.end(); pos++)
 				pos = lift(pos);
 
-		for(auto& rule : d)
+		for(auto& rule : d) {
 				for(auto pos = rule.second.begin(); pos != rule.second.end(); pos++)
 						pos = lift(pos);
+				++ss += rule.second.size();
+		}
+
+		std::cerr << "dictionary entries: " << d.size() << std::endl;
+		std::cerr << "dictionary size: " << ss << std::endl;
+		std::cerr << "expression size: " << expr.size() << std::endl;
 
 		d.expand(expr);
 
