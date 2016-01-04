@@ -149,8 +149,6 @@ bool rz_compress_block(const config&, void *block, size_t block_sz, int) {
 		
 		expression expr((unsigned char *)block, (unsigned char *)block + block_sz);
 
-		std::set<expression> seen;
-
 		dictionary d;
 		rdictionary r;
 
@@ -165,22 +163,23 @@ bool rz_compress_block(const config&, void *block, size_t block_sz, int) {
 				std::cerr << std::endl << "d: " << d.size() << " r: " << r.size() << " e: " << expr.size();
 
 				for(auto pos = expr.begin(); std::next(pos) != expr.end(); pos++) {
+
 						if(pos->second == std::next(pos)->second) {
 								std::next(pos)->first += pos->first;
 								pos = std::prev(expr.erase(pos));
+						} else {
+								h[expression(pos, std::next(pos,2))]++;
 						}
 				}
 
-				for(auto iter = expr.cbegin(); std::next(iter) != expr.cend(); iter++)
-						h[expression(iter, std::next(iter,2))]++;
-
 				for(auto iter = h.cbegin(); iter != h.cend(); iter++) {
-						if(iter->second > 1 and seen.find(iter->first) == seen.end()) {
-								symbol s = -d.size();
-								auto& x = iter->first;
+
+						const auto& x = iter->first;
+
+						if(iter->second > 1) { // and r.find(x) == r.end()) {
+								symbol s = -(d.size() + 256); 
 								d[s] = x;
 								r[x] = s;
-								seen.insert(x);
 						}
 				}
 
