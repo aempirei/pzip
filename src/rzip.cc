@@ -38,7 +38,6 @@ extern "C" {
 
 struct term;
 struct dictionary;
-struct histogram;
 
 using symbol = int32_t;
 using expression = std::list<term>;
@@ -46,7 +45,6 @@ using rdictionary = std::map<expression, symbol>;
 
 using term_baseclass = std::pair<size_t, symbol>;
 using dictionary_baseclass = std::map<symbol, expression>;
-using histogram_baseclass = std::map<expression, size_t>;
 
 using rule = dictionary_baseclass::value_type;
 
@@ -59,10 +57,6 @@ struct dictionary : dictionary_baseclass {
 		using dictionary_baseclass::dictionary_baseclass;
 		expression& expand(expression&) const;
 		key_type next_key() const;
-};
-
-struct histogram : histogram_baseclass {
-		using histogram_baseclass::histogram_baseclass;
 };
 
 term::term(const symbol& x) : term(1,x) {
@@ -159,45 +153,96 @@ bool rz_compress_block(const config&, void *block, size_t block_sz, int) {
 
 		size_t last_sz;
 
+		std::cerr << std::endl;
+
 		do {
 
-				histogram h;
+				std::map <expression,size_t> histogram;
 
 				last_sz = d.size();
 
-				std::cerr << std::endl << "d: " << d.size() << " r: " << r.size() << " e: " << expr.size();
+				std::cerr << "d: " << d.size() << " e: " << expr.size() << std::endl;
 
-				for(auto pos = expr.begin(); std::next(pos) != expr.end(); pos++) {
+				auto pos = expr.begin();
+
+				while(std::next(pos) != expr.end()) {
 
 						if(pos->second == std::next(pos)->second) {
 								std::next(pos)->first += pos->first;
-								pos = std::prev(expr.erase(pos));
+								pos = expr.erase(pos);
 						} else {
-								h[expression(pos, std::next(pos,2))]++;
+								histogram[expression(pos, std::next(pos,2))]++;
+								pos++;
 						}
 				}
 
-				for(auto iter = h.cbegin(); iter != h.cend(); iter++) {
+				for(const auto& sr : histogram) {
 
-						if(iter->second > 1) {
-								const auto& x = iter->first;
+						if(sr.second > 1) {
+								const auto& x = sr.first;
 								symbol s = d.next_key();
 								d[s] = x;
 								r[x] = s;
 						}
 				}
 
-				for(auto pos = expr.begin(); std::next(pos) != expr.end(); pos++) {
+				pos = expr.begin();
+
+				while(std::next(pos) != expr.end()) {
 
 						auto rrule = r.find(expression(pos, std::next(pos,2)));
 
 						if(rrule != r.end()) {
 								expr.insert(pos, rrule->second);
-								pos = std::prev(expr.erase(pos, std::next(pos,2)));
+								pos = expr.erase(pos, std::next(pos,2));
+						} else {
+								pos++;
 						}
 				}
 
 		} while(d.size() > last_sz);
+
+		std::map<symbol, size_t> singletons;
+
+		for(const auto& x : expr)
+				singletons[x.second] += x.first;
+
+		for(const auto& rule : d)
+				for(const auto& x : rule.second)
+						singletons[x.second] += x.first;
+
+		auto iter = singletons.begin();
+		while(iter != singletons.end())  {
+				if(iter->first >= 0 or iter->second > 1)
+						iter = singletons.erase(iter);
+				else
+						iter++;
+		}
+
+		auto lift = [&](expression::iterator pos) -> expression::iterator {
+				const symbol& s = pos->second;
+				auto singleton = singletons.find(s);
+				if(singleton != singletons.end()) {
+						auto rule = d.find(s);
+						const auto& x = rule->second;
+						expr.insert(pos, x.begin(), x.end());
+						pos = expr.erase(pos);
+						d.erase(s);
+				}
+				return pos;
+		};
+
+		for(auto pos = expr.begin(); pos != expr.end(); pos++)
+				pos = lift(pos);
+
+		for(auto& rule : d)
+				for(auto pos = rule.second.begin(); pos != rule.second.end(); pos++)
+						pos = lift(pos);
+
+		d.expand(expr);
+
+		for(auto x : expr)
+				std::cout << (char)x.second;
 
 		return false;
 }
