@@ -12,6 +12,7 @@
 
 #include <iomanip>
 #include <iostream>
+#include <cassert>
 
 #include <cstring>
 #include <cstdlib>
@@ -41,10 +42,13 @@ struct histogram;
 
 using symbol = int32_t;
 using expression = std::list<term>;
+using rdictionary = std::map<expression, symbol>;
 
 using term_baseclass = std::pair<size_t, symbol>;
 using dictionary_baseclass = std::map<symbol, expression>;
 using histogram_baseclass = std::map<expression, size_t>;
+
+using rule = dictionary_baseclass::value_type;
 
 struct term : term_baseclass {
 		using term_baseclass::term_baseclass;
@@ -64,6 +68,7 @@ struct histogram : histogram_baseclass {
 };
 
 expression& dictionary::expand(expression& expr) const {
+
 	auto pos = expr.begin();
 
 	while(pos != expr.end()) {
@@ -142,12 +147,51 @@ ssize_t read_block(int fd, void *block, size_t block_sz) {
 
 bool rz_compress_block(const config&, void *block, size_t block_sz, int) {
 		
-		expression expr;
+		expression expr((unsigned char *)block, (unsigned char *)block + block_sz);
 
-		unsigned char *p = (unsigned char *)block;
+		std::set<expression> seen;
 
-		for(size_t n = 0; n < block_sz; n++)
-				expr.push_back(term(1,  symbol(p[n])));
+		dictionary d;
+		rdictionary r;
+
+		size_t last_sz;
+
+		do {
+
+				histogram h;
+
+				last_sz = d.size();
+
+				std::cerr << std::endl << "d: " << d.size() << " r: " << r.size() << " e: " << expr.size();
+
+				for(auto iter = expr.cbegin(); std::next(iter) != expr.cend(); iter++)
+						h[expression(iter, std::next(iter,2))]++;
+
+				for(auto iter = h.cbegin(); iter != h.cend(); iter++) {
+						if(iter->second > 1 and seen.find(iter->first) == seen.end()) {
+								symbol s = -d.size();
+								auto& x = iter->first;
+								d[s] = x;
+								r[x] = s;
+								seen.insert(x);
+						}
+				}
+
+				auto pos = expr.begin();
+
+				while(std::next(pos) != expr.end()) {
+
+						auto rrule = r.find(expression(pos, std::next(pos,2)));
+
+						if(rrule != r.end()) {
+								expr.insert(pos, rrule->second);
+								pos = expr.erase(pos, std::next(pos,2));
+						} else {
+								pos++;
+						}
+				}
+
+		} while(d.size() > last_sz);
 
 		return false;
 }
