@@ -164,6 +164,17 @@ bool rz_compress_block(const config&, void *block, size_t block_sz, int) {
 
 				std::cerr << std::endl << "d: " << d.size() << " r: " << r.size() << " e: " << expr.size();
 
+				auto pos = expr.begin();
+
+				while(std::next(pos) != expr.end()) {
+						if(pos->second == std::next(pos)->second) {
+								std::next(pos)->first += pos->first;
+								pos = expr.erase(pos);
+						} else {
+								pos++;
+						}
+				}
+
 				for(auto iter = expr.cbegin(); std::next(iter) != expr.cend(); iter++)
 						h[expression(iter, std::next(iter,2))]++;
 
@@ -177,7 +188,7 @@ bool rz_compress_block(const config&, void *block, size_t block_sz, int) {
 						}
 				}
 
-				auto pos = expr.begin();
+				pos = expr.begin();
 
 				while(std::next(pos) != expr.end()) {
 
