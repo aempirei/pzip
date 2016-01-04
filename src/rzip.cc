@@ -168,35 +168,29 @@ bool rz_compress_block(const config&, void *block, size_t block_sz, int) {
 				while(std::next(pos) != expr.end()) {
 
 						if(pos->second == std::next(pos)->second) {
+
 								std::next(pos)->first += pos->first;
 								pos = expr.erase(pos);
+
 						} else {
-								histogram[expression(pos, std::next(pos,2))]++;
-								pos++;
-						}
-				}
 
-				for(const auto& sr : histogram) {
+								expression bigram(pos, std::next(pos,2));
 
-						if(sr.second > 1) {
-								const auto& x = sr.first;
-								symbol s = d.next_key();
-								d[s] = x;
-								r[x] = s;
-						}
-				}
+								auto rrule = r.find(bigram);
 
-				pos = expr.begin();
+								if(++histogram[bigram] > 1 and rrule == r.end()) {
+										symbol key = d.next_key();
+										d[key] = bigram;
+										r[bigram] = key;
+										rrule = r.find(bigram);
+								}
 
-				while(std::next(pos) != expr.end()) {
-
-						auto rrule = r.find(expression(pos, std::next(pos,2)));
-
-						if(rrule != r.end()) {
-								expr.insert(pos, rrule->second);
-								pos = expr.erase(pos, std::next(pos,2));
-						} else {
-								pos++;
+								if(rrule != r.end()) {
+										pos = expr.erase(pos, std::next(pos,2));
+										pos = expr.insert(pos, rrule->second);
+								} else {
+										pos++;
+								}
 						}
 				}
 
