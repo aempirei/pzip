@@ -35,6 +35,55 @@ extern "C" {
 
 #include <config.hh>
 
+struct term;
+struct dictionary;
+struct histogram;
+
+using symbol = int32_t;
+using expression = std::list<term>;
+
+using term_baseclass = std::pair<size_t, symbol>;
+using dictionary_baseclass = std::map<symbol, expression>;
+using histogram_baseclass = std::map<expression, size_t>;
+
+struct term : term_baseclass {
+		using term_baseclass::term_baseclass;
+		term(const symbol&);
+};
+
+term::term(const symbol& x) : term(1,x) {
+}
+
+struct dictionary : dictionary_baseclass {
+		using dictionary_baseclass::dictionary_baseclass;
+		expression& expand(expression&) const;
+};
+
+struct histogram : histogram_baseclass {
+		using histogram_baseclass::histogram_baseclass;
+};
+
+expression& dictionary::expand(expression& expr) const {
+	auto pos = expr.begin();
+
+	while(pos != expr.end()) {
+
+			auto rule = find(pos->second);
+
+			if(rule != end()) {
+					for(size_t n = 0; n < pos->first; n++)
+							expr.insert(std::next(pos), rule->second.begin(), rule->second.end());
+					pos = expr.erase(pos);
+			} else {
+					while(pos->first-- > 1)
+							expr.insert(pos, pos->second);
+					pos++;
+			}
+	}
+
+	return expr;
+}
+
 const char *rz_extension = ".rz";
 
 bool rz_process_file(const config&, const char *);
@@ -44,6 +93,10 @@ bool rz_compress_block(const config&, void *, size_t, int);
 
 bool rz_compress(const config&, int, int);
 bool rz_decompress(const config&, int, int);
+
+constexpr char ansi_save_pos[] = "\033[s";
+constexpr char ansi_load_pos[] = "\033[u";
+constexpr char ansi_clear_line[] = "\033[K";
 
 const static std::map<unsigned int, const char *> file_type = {
 		{ S_IFBLK,  "block device" },
@@ -87,73 +140,28 @@ ssize_t read_block(int fd, void *block, size_t block_sz) {
 		return done;
 }
 
-constexpr char ansi_save_pos[] = "\033[s";
-constexpr char ansi_load_pos[] = "\033[u";
-constexpr char ansi_clear_line[] = "\033[K";
-
-template <typename> struct matrix;
-
-template <typename T> struct matrix {
-		using value_type = T;
-		T *data;
-		size_t width;
-		size_t height;
-		T& cell(size_t, size_t);
-		matrix(size_t, size_t);
-		T& operator()(size_t, size_t);
-		~matrix();
-};
-
-template <typename T> matrix<T>::matrix(size_t my_width, size_t my_height) : width(my_width), height(my_height) {
-		data = new T[width * height];
-}
-
-template <typename T> matrix<T>::~matrix() {
-		delete[] data;
-}
-
-template <typename T> T& matrix<T>::operator()(size_t i, size_t j) {
-		return cell(i,j);
-}
-
-template <typename T> T& matrix<T>::cell(size_t i, size_t j) {
-		return data[i + j * width];
-}
-
 bool rz_compress_block(const config&, void *block, size_t block_sz, int) {
+		
+		expression expr;
 
-		matrix<char> m(block_sz, block_sz);
-		char *p = (char *)block;
+		unsigned char *p = (unsigned char *)block;
 
-		for(size_t i = 0, j = block_sz - 1; i < block_sz; i++)
-				m(i,j) = (p[i] == p[j]);
-
-		for(size_t i = block_sz - 1, j = 0; j < block_sz; j++)
-				m(i,j) = (p[i] == p[j]);
-
-		for(ssize_t i = block_sz - 2; i >= 0; i--)
-				for(ssize_t j = block_sz - 2; j >= 0; j--)
-						m(i,j) = (p[i] == p[j]) ? m(i+1,j+1) + 1 : 0;
+		for(size_t n = 0; n < block_sz; n++)
+				expr.push_back(term(1,  symbol(p[n])));
 
 		return false;
 }
 
 bool rz_compress(const config& cfg, int fdin, int fdout) {
 
-		constexpr size_t block_sz = (1 << 16);
+		constexpr size_t block_sz = (1 << 20);
 
 		char block[block_sz];
 
 		ssize_t n;
 
-		std::cerr << ansi_save_pos << ": ";
-
-		while((n = read_block(fdin, block, block_sz)) > 0) {
-				std::cerr << '.' << std::flush;
+		while((n = read_block(fdin, block, block_sz)) > 0)
 				rz_compress_block(cfg, block, n, fdout);
-		}
-
-		std::cerr << ansi_load_pos << ansi_clear_line << std::flush;
 
 		return (n != -1);
 }
