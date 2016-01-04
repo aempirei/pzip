@@ -55,17 +55,22 @@ struct term : term_baseclass {
 		term(const symbol&);
 };
 
-term::term(const symbol& x) : term(1,x) {
-}
-
 struct dictionary : dictionary_baseclass {
 		using dictionary_baseclass::dictionary_baseclass;
 		expression& expand(expression&) const;
+		key_type next_key() const;
 };
 
 struct histogram : histogram_baseclass {
 		using histogram_baseclass::histogram_baseclass;
 };
+
+term::term(const symbol& x) : term(1,x) {
+}
+
+dictionary::key_type dictionary::next_key() const {
+		return -(size() + 256);
+}
 
 expression& dictionary::expand(expression& expr) const {
 
@@ -174,10 +179,9 @@ bool rz_compress_block(const config&, void *block, size_t block_sz, int) {
 
 				for(auto iter = h.cbegin(); iter != h.cend(); iter++) {
 
-						const auto& x = iter->first;
-
-						if(iter->second > 1) { // and r.find(x) == r.end()) {
-								symbol s = -(d.size() + 256); 
+						if(iter->second > 1) {
+								const auto& x = iter->first;
+								symbol s = d.next_key();
 								d[s] = x;
 								r[x] = s;
 						}
