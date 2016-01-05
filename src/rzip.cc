@@ -49,21 +49,21 @@ using dictionary_baseclass = std::map<symbol, expression>;
 using rule = dictionary_baseclass::value_type;
 
 struct term : term_baseclass {
-		using term_baseclass::term_baseclass;
-		term(const symbol&);
+	using term_baseclass::term_baseclass;
+	term(const symbol&);
 };
 
 struct dictionary : dictionary_baseclass {
-		using dictionary_baseclass::dictionary_baseclass;
-		expression& expand(expression&) const;
-		key_type next_key() const;
+	using dictionary_baseclass::dictionary_baseclass;
+	expression& expand(expression&) const;
+	key_type next_key() const;
 };
 
 term::term(const symbol& x) : term(1,x) {
 }
 
 dictionary::key_type dictionary::next_key() const {
-		return -(size() + 256);
+	return -(size() + 256);
 }
 
 expression& dictionary::expand(expression& expr) const {
@@ -72,17 +72,17 @@ expression& dictionary::expand(expression& expr) const {
 
 	while(pos != expr.end()) {
 
-			auto rule = find(pos->second);
+		auto rule = find(pos->second);
 
-			if(rule != end()) {
-					for(size_t n = 0; n < pos->first; n++)
-							expr.insert(std::next(pos), rule->second.begin(), rule->second.end());
-					pos = expr.erase(pos);
-			} else {
-					while(pos->first-- > 1)
-							expr.insert(pos, pos->second);
-					pos++;
-			}
+		if(rule != end()) {
+			for(size_t n = 0; n < pos->first; n++)
+				expr.insert(std::next(pos), rule->second.begin(), rule->second.end());
+			pos = expr.erase(pos);
+		} else {
+			while(pos->first-- > 1)
+				expr.insert(pos, pos->second);
+			pos++;
+		}
 	}
 
 	return expr;
@@ -103,298 +103,298 @@ constexpr char ansi_load_pos[] = "\033[u";
 constexpr char ansi_clear_line[] = "\033[K";
 
 const static std::map<unsigned int, const char *> file_type = {
-		{ S_IFBLK,  "block device" },
-		{ S_IFCHR,  "character device" },
-		{ S_IFDIR,  "directory" },
-		{ S_IFIFO,  "FIFO/pipe" },
-		{ S_IFLNK,  "symlink" },
-		{ S_IFREG,  "regular file" },
-		{ S_IFSOCK, "socket" }
+	{ S_IFBLK,  "block device" },
+	{ S_IFCHR,  "character device" },
+	{ S_IFDIR,  "directory" },
+	{ S_IFIFO,  "FIFO/pipe" },
+	{ S_IFLNK,  "symlink" },
+	{ S_IFREG,  "regular file" },
+	{ S_IFSOCK, "socket" }
 };
 
 const char *get_file_type(const struct stat& sb) {
 
-		unsigned int mode = sb.st_mode &  S_IFMT;
-		auto iter = file_type.find(mode);
+	unsigned int mode = sb.st_mode &  S_IFMT;
+	auto iter = file_type.find(mode);
 
-		if(iter == file_type.end())
-				return "unknown";
+	if(iter == file_type.end())
+		return "unknown";
 
-		return iter->second;
+	return iter->second;
 }
 
 ssize_t read_block(int fd, void *block, size_t block_sz) {
 
-		char *p = (char *)block;
+	char *p = (char *)block;
 
-		ssize_t left = block_sz;
-		ssize_t done = 0;
-		ssize_t n;
+	ssize_t left = block_sz;
+	ssize_t done = 0;
+	ssize_t n;
 
-		while((n = read(fd, p, left)) != 0) {
-				if(n > 0) {
-						left -= n;
-						done += n;
-						p += n;
-				} else if(n == -1 && errno != EINTR) {
-						return -1;
-				}
+	while((n = read(fd, p, left)) != 0) {
+		if(n > 0) {
+			left -= n;
+			done += n;
+			p += n;
+		} else if(n == -1 && errno != EINTR) {
+			return -1;
 		}
+	}
 
-		return done;
+	return done;
 }
 
 bool rz_compress_block(const config& cfg, void *block, size_t block_sz, int) {
-		
-		expression expr((unsigned char *)block, (unsigned char *)block + block_sz);
 
-		dictionary d;
-		rdictionary r;
+	expression expr((unsigned char *)block, (unsigned char *)block + block_sz);
 
-		size_t last_sz;
-		size_t round = 0;
+	dictionary d;
+	rdictionary r;
 
-		std::cerr << std::endl;
+	size_t last_sz;
+	size_t round = 0;
 
-		do {
+	std::cerr << std::endl;
 
-				std::map <expression,size_t> histogram;
+	do {
 
-				last_sz = d.size();
+		std::map <expression,size_t> histogram;
 
-				std::cerr << "r: " << round << '/' << cfg.level << " d: " << d.size() << " e: " << expr.size() << std::endl;
+		last_sz = d.size();
 
-				if(round++ == cfg.level)
-						break;
+		std::cerr << "r: " << round << '/' << cfg.level << " d: " << d.size() << " e: " << expr.size() << std::endl;
 
-				auto pos = expr.begin();
+		if(round++ == cfg.level)
+			break;
 
-				while(std::next(pos) != expr.end()) {
+		auto pos = expr.begin();
 
-						if(pos->second == std::next(pos)->second) {
+		while(std::next(pos) != expr.end()) {
 
-								std::next(pos)->first += pos->first;
-								pos = expr.erase(pos);
+			if(pos->second == std::next(pos)->second) {
 
-						} else {
+				std::next(pos)->first += pos->first;
+				pos = expr.erase(pos);
 
-								expression bigram(pos, std::next(pos,2));
+			} else {
 
-								auto rrule = r.find(bigram);
+				expression bigram(pos, std::next(pos,2));
 
-								if(++histogram[bigram] > 1 and rrule == r.end()) {
-										symbol key = d.next_key();
-										d[key] = bigram;
-										r[bigram] = key;
-										rrule = r.find(bigram);
-								}
+				auto rrule = r.find(bigram);
 
-								if(rrule != r.end()) {
-										pos = expr.erase(pos, std::next(pos,2));
-										pos = expr.insert(pos, rrule->second);
-								} else {
-										pos++;
-								}
-						}
+				if(++histogram[bigram] > 1 and rrule == r.end()) {
+					symbol key = d.next_key();
+					d[key] = bigram;
+					r[bigram] = key;
+					rrule = r.find(bigram);
 				}
 
-		} while(d.size() > last_sz);
-
-		std::map<symbol, size_t> singletons;
-
-		for(const auto& x : expr)
-				singletons[x.second] += x.first;
-
-		for(const auto& rule : d)
-				for(const auto& x : rule.second)
-						singletons[x.second] += x.first;
-
-		auto iter = singletons.begin();
-		while(iter != singletons.end())  {
-				if(iter->first >= 0 or iter->second > 1)
-						iter = singletons.erase(iter);
-				else
-						iter++;
-		}
-
-		auto lift = [&](expression::iterator pos) -> expression::iterator {
-				const symbol& s = pos->second;
-				auto singleton = singletons.find(s);
-				if(singleton != singletons.end()) {
-						auto rule = d.find(s);
-						const auto& x = rule->second;
-						expr.insert(pos, x.begin(), x.end());
-						pos = expr.erase(pos);
-						d.erase(s);
+				if(rrule != r.end()) {
+					pos = expr.erase(pos, std::next(pos,2));
+					pos = expr.insert(pos, rrule->second);
+				} else {
+					pos++;
 				}
-				return pos;
-		};
-
-		size_t ss = 0;
-
-		for(auto pos = expr.begin(); pos != expr.end(); pos++)
-				pos = lift(pos);
-
-		for(auto& rule : d) {
-				for(auto pos = rule.second.begin(); pos != rule.second.end(); pos++)
-						pos = lift(pos);
-				++ss += rule.second.size();
+			}
 		}
 
-		std::cerr << "dictionary entries: " << d.size() << std::endl;
-		std::cerr << "dictionary size: " << ss << std::endl;
-		std::cerr << "expression size: " << expr.size() << std::endl;
+	} while(d.size() > last_sz);
 
-		d.expand(expr);
+	std::map<symbol, size_t> singletons;
 
-		for(auto x : expr)
-				std::cout << (char)x.second;
+	for(const auto& x : expr)
+		singletons[x.second] += x.first;
 
-		return false;
+	for(const auto& rule : d)
+		for(const auto& x : rule.second)
+			singletons[x.second] += x.first;
+
+	auto iter = singletons.begin();
+	while(iter != singletons.end())  {
+		if(iter->first >= 0 or iter->second > 1)
+			iter = singletons.erase(iter);
+		else
+			iter++;
+	}
+
+	auto lift = [&](expression::iterator pos) -> expression::iterator {
+		const symbol& s = pos->second;
+		auto singleton = singletons.find(s);
+		if(singleton != singletons.end()) {
+			auto rule = d.find(s);
+			const auto& x = rule->second;
+			expr.insert(pos, x.begin(), x.end());
+			pos = expr.erase(pos);
+			d.erase(s);
+		}
+		return pos;
+	};
+
+	size_t ss = 0;
+
+	for(auto pos = expr.begin(); pos != expr.end(); pos++)
+		pos = lift(pos);
+
+	for(auto& rule : d) {
+		for(auto pos = rule.second.begin(); pos != rule.second.end(); pos++)
+			pos = lift(pos);
+		++ss += rule.second.size();
+	}
+
+	std::cerr << "dictionary entries: " << d.size() << std::endl;
+	std::cerr << "dictionary size: " << ss << std::endl;
+	std::cerr << "expression size: " << expr.size() << std::endl;
+
+	d.expand(expr);
+
+	for(auto x : expr)
+		std::cout << (char)x.second;
+
+	return false;
 }
 
 bool rz_compress(const config& cfg, int fdin, int fdout) {
 
-		constexpr size_t block_sz = (1 << 20);
+	constexpr size_t block_sz = (1 << 20);
 
-		char block[block_sz];
+	char block[block_sz];
 
-		ssize_t n;
+	ssize_t n;
 
-		while((n = read_block(fdin, block, block_sz)) > 0)
-				rz_compress_block(cfg, block, n, fdout);
+	while((n = read_block(fdin, block, block_sz)) > 0)
+		rz_compress_block(cfg, block, n, fdout);
 
-		return (n != -1);
+	return (n != -1);
 }
 
 bool rz_decompress(const config&, int, int) {
-		return false;
+	return false;
 }
 
 bool rz_process_fd(const config& cfg, int fdin, int fdout) {
-		return cfg.compress ? rz_compress(cfg, fdin, fdout) : rz_decompress(cfg, fdin, fdout);
+	return cfg.compress ? rz_compress(cfg, fdin, fdout) : rz_decompress(cfg, fdin, fdout);
 }
 
 bool rz_process_file(const config& cfg, const char *filenamein) {
 
-		int fdin;
-		int fdout;
-		struct stat sb;
+	int fdin;
+	int fdout;
+	struct stat sb;
 
-		std::cerr << std::setw(12) << filenamein << ": ";
+	std::cerr << std::setw(12) << filenamein << ": ";
 
-		if(lstat(filenamein, &sb) == -1) {
-				std::cerr << strerror(errno) << std::endl;
-				return false;
+	if(lstat(filenamein, &sb) == -1) {
+		std::cerr << strerror(errno) << std::endl;
+		return false;
+	}
+
+	if(S_ISDIR(sb.st_mode)) {
+		std::cerr << "ignoring directory" << std::endl;
+		return false;
+	}
+
+	if(cfg.stdoutput) {
+
+		// if output is standard output then
+		// input type doesnt matter
+		// as long as it can be read
+
+		fdout = dup(STDOUT_FILENO);
+
+	} else {
+
+		// if output is not standard output
+		// then only compress regular files
+
+		if(not S_ISREG(sb.st_mode)) {
+			std::cerr << "ignoring " << get_file_type(sb) << std::endl;
+			return false;
 		}
 
-		if(S_ISDIR(sb.st_mode)) {
-				std::cerr << "ignoring directory" << std::endl;
+		// if output is not standard output
+		// then make sure the filenamein suffix
+		// matches the mode of operation
+
+		const size_t extension_sz = strlen(rz_extension);
+		const size_t filenamein_sz = strlen(filenamein);
+
+		const char *p = filenamein + filenamein_sz;
+
+		std::string filenameout(filenamein);
+
+		if(extension_sz < filenamein_sz)
+			p -= extension_sz;
+
+		if(strcmp(p, rz_extension) == 0) {
+			if(cfg.compress) {
+				std::cerr << "already has " << rz_extension << " suffix -- ignored" << std::endl;
 				return false;
-		}
-
-		if(cfg.stdoutput) {
-
-				// if output is standard output then
-				// input type doesnt matter
-				// as long as it can be read
-
-				fdout = dup(STDOUT_FILENO);
-
+			}
+			filenameout.erase(filenameout.end() - extension_sz, filenameout.end());
 		} else {
-
-				// if output is not standard output
-				// then only compress regular files
-
-				if(not S_ISREG(sb.st_mode)) {
-						std::cerr << "ignoring " << get_file_type(sb) << std::endl;
-						return false;
-				}
-
-				// if output is not standard output
-				// then make sure the filenamein suffix
-				// matches the mode of operation
-
-				const size_t extension_sz = strlen(rz_extension);
-				const size_t filenamein_sz = strlen(filenamein);
-
-				const char *p = filenamein + filenamein_sz;
-
-				std::string filenameout(filenamein);
-
-				if(extension_sz < filenamein_sz)
-						p -= extension_sz;
-
-				if(strcmp(p, rz_extension) == 0) {
-						if(cfg.compress) {
-								std::cerr << "already has " << rz_extension << " suffix -- ignored" << std::endl;
-								return false;
-						}
-						filenameout.erase(filenameout.end() - extension_sz, filenameout.end());
-				} else {
-						if(not cfg.compress) {
-								std::cerr << "unknown suffix -- ignored" << std::endl;
-								return false;
-
-						}
-						filenameout += rz_extension;
-				}
-
-				std::cerr << "=> " << filenameout;
-
-				fdout = open(filenameout.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0664);
-				if(fdout == -1) {
-						std::cerr << strerror(errno) << std::endl;
-						return false;
-				}
-		}
-
-		fdin = open(filenamein, O_RDONLY);
-		if(fdin == -1) {
-				std::cerr << strerror(errno) << std::endl;
-				close(fdout);
+			if(not cfg.compress) {
+				std::cerr << "unknown suffix -- ignored" << std::endl;
 				return false;
+
+			}
+			filenameout += rz_extension;
 		}
 
-		rz_process_fd(cfg, fdin, fdout);
+		std::cerr << "=> " << filenameout;
 
-		std::cerr << std::endl;
+		fdout = open(filenameout.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0664);
+		if(fdout == -1) {
+			std::cerr << strerror(errno) << std::endl;
+			return false;
+		}
+	}
 
-		close(fdin);
+	fdin = open(filenamein, O_RDONLY);
+	if(fdin == -1) {
+		std::cerr << strerror(errno) << std::endl;
 		close(fdout);
+		return false;
+	}
 
-		return true;
+	rz_process_fd(cfg, fdin, fdout);
+
+	std::cerr << std::endl;
+
+	close(fdin);
+	close(fdout);
+
+	return true;
 }
 
 int main(int argc, char **argv) {
 
-		config cfg;
+	config cfg;
 
-		if(not cfg.getopt(argc, argv)) {
-				std::cerr << "Try `" << *argv << " -h' for more information." << std::endl;
-				return -1;
-		}
+	if(not cfg.getopt(argc, argv)) {
+		std::cerr << "Try `" << *argv << " -h' for more information." << std::endl;
+		return -1;
+	}
 
-		if(cfg.help) {
-				cfg.usage(*argv);
-				return 0;
-		}
-
-		if(cfg.stdoutput and not cfg.force) {
-				std::cerr << "compressed data not written to a terminal. Use -f to force ";
-				if(not cfg.compress)
-						std::cerr << "de";
-				std::cerr << "compression." << std::endl;
-				return -1;
-		}
-
-		if(cfg.files.empty()) {
-
-				rz_process_fd(cfg, STDIN_FILENO, STDOUT_FILENO);
-
-		} else
-				for(auto file : cfg.files)
-						rz_process_file(cfg, file.c_str());
-
+	if(cfg.help) {
+		cfg.usage(*argv);
 		return 0;
+	}
+
+	if(cfg.stdoutput and not cfg.force) {
+		std::cerr << "compressed data not written to a terminal. Use -f to force ";
+		if(not cfg.compress)
+			std::cerr << "de";
+		std::cerr << "compression." << std::endl;
+		return -1;
+	}
+
+	if(cfg.files.empty()) {
+
+		rz_process_fd(cfg, STDIN_FILENO, STDOUT_FILENO);
+
+	} else
+		for(auto file : cfg.files)
+			rz_process_file(cfg, file.c_str());
+
+	return 0;
 }
