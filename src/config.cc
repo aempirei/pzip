@@ -26,6 +26,10 @@ void config::usage(const char *prog) const {
         option('f',"overwrite existing output files") <<
         option('c',"output to standard out") <<
         option('q',"suppress output messages") <<
+        option('0',"no compression") <<
+        option('0' + level, "default compression") <<
+        option('1',"fastest compression") <<
+        option('9',"best compression") <<
         option('v',"be verbose") <<
 
         std::endl <<
@@ -35,30 +39,34 @@ void config::usage(const char *prog) const {
 
 bool config::getopt(int argc, char **argv) {
 
-    int opt;
+		int opt;
 
-    while ((opt = ::getopt(argc, argv, "hdzkfcqv")) != -1) {
+		while ((opt = ::getopt(argc, argv, "hdzkfcqv0123456789")) != -1) {
 
-        switch (opt) {
+				if(isdigit(opt)) {
 
-            case 'h': help      = true  ; break;
-            case 'd': compress  = false ; break;
-            case 'z': compress  = true  ; break;
-            case 'k': keep      = true  ; break;
-            case 'f': force     = true  ; break;
-            case 'c': stdoutput = true  ; break;
-            case 'q': quiet     = true  ; break;
-            case 'v': verbose   = true  ; break;
+						level = opt - '0';
 
-            default : return false;
-        }
-    }
+				} else switch (opt) {
 
-    for(int i = optind; i < argc; i++)
-        files.push_back(argv[i]);
+						case 'h': help      = true  ; break;
+						case 'd': compress  = false ; break;
+						case 'z': compress  = true  ; break;
+						case 'k': keep      = true  ; break;
+						case 'f': force     = true  ; break;
+						case 'c': stdoutput = true  ; break;
+						case 'q': quiet     = true  ; break;
+						case 'v': verbose   = true  ; break;
 
-	if(files.empty())
-			stdoutput = true;
+						default : return false;
+				}
+		}
 
-    return true;
+		for(int i = optind; i < argc; i++)
+				files.push_back(argv[i]);
+
+		if(files.empty())
+				stdoutput = true;
+
+		return true;
 }

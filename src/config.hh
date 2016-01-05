@@ -14,6 +14,8 @@ struct config {
 
     bool compress  = true;
 
+	size_t level = 2;
+
     std::list<std::string> files;
     void usage(const char *) const;
     bool getopt(int, char **);

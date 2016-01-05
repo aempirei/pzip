@@ -144,7 +144,7 @@ ssize_t read_block(int fd, void *block, size_t block_sz) {
 		return done;
 }
 
-bool rz_compress_block(const config&, void *block, size_t block_sz, int) {
+bool rz_compress_block(const config& cfg, void *block, size_t block_sz, int) {
 		
 		expression expr((unsigned char *)block, (unsigned char *)block + block_sz);
 
@@ -152,6 +152,7 @@ bool rz_compress_block(const config&, void *block, size_t block_sz, int) {
 		rdictionary r;
 
 		size_t last_sz;
+		size_t round = 0;
 
 		std::cerr << std::endl;
 
@@ -161,7 +162,10 @@ bool rz_compress_block(const config&, void *block, size_t block_sz, int) {
 
 				last_sz = d.size();
 
-				std::cerr << "d: " << d.size() << " e: " << expr.size() << std::endl;
+				std::cerr << "r: " << round << '/' << cfg.level << " d: " << d.size() << " e: " << expr.size() << std::endl;
+
+				if(round++ == cfg.level)
+						break;
 
 				auto pos = expr.begin();
 
