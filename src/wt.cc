@@ -21,99 +21,59 @@
 #include <cstdio>
 #include <cctype>
 
-namespace ASCII {
-	constexpr char STX = '\2';
-	constexpr char ETX = '\3';
-}
-
-using sequence = std::list<char>;
+using alphabet = char;
+using sequence = std::list<alphabet>;
 using table = std::list<sequence>;
+using string = std::basic_string<alphabet>;
 
 void usage(const char *);
 std::string sequence_string(const sequence&);
+void print_table(const table&);
 
 int main(int argc, char **argv) {
 
-	table messages;
-
-	sequence message;
-	sequence head;
-	sequence back;
+	table F;
+	string X;
+	string Y;
+	sequence seq;
 
 	if(argc == 1) {
 		usage(argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
-	message.push_back(ASCII::STX);
-
 	for(int n = 1; n < argc; n++) {
-		message.insert(message.end(), argv[n], argv[n] + strlen(argv[n]));
-		message.push_back(' ');
+		char *p = argv[n];
+		while(*p != '\0')
+			X.push_back(*p++);
+		X.push_back(' ');
 	}
 
-	message.pop_back();
-	message.push_back(ASCII::ETX);
+	X.pop_back();
+	X.push_back('$');
 
-	for(size_t n = 0; n < message.size(); n++) {
-		messages.push_back(message);
-		message.push_back(message.front());
-		message.pop_front();
-	}
+	seq.assign(X.begin(), X.end());
+	seq.push_front(seq.back());
+	seq.pop_back();
 
-	messages.sort();
+	Y.assign(seq.begin(), seq.end());
 
-	for(const auto& s : messages) {
-		back.push_back(s.back());
-		head.push_back(s.front());
-	}
-
-	std::cout << "head: " << sequence_string(head) << std::endl;
-	std::cout << "back: " << sequence_string(back) << std::endl;
-
-	std::cout << std::endl;
-
-	auto print_table = [](const table& t) {
-		for(const auto& s : t)
-			std::cout << sequence_string(s) << std::endl;
-		std::cout << std::endl;
-	};
-
-	print_table(messages);
-
-	messages.clear();
-
-	for(auto ch : head)
-		messages.push_back({ch});
-
-	print_table(messages);
-
-	while(messages.front().size() < message.size()) {
-
-		auto mter = messages.begin();
-		auto bter = back.begin();
-
-		for(size_t n = 0; n < message.size(); n++)
-			(mter++)->push_front(*bter++);
-
-		messages.sort();
-
-		print_table(messages);
-
-		std::cout << "press <ENTER> to continue." << std::flush;
-
-		(void)getchar();
-	}
+	std::cout << "dom: " << X << std::endl;
+	std::cout << "cod: " << Y << std::endl;
 
 	exit(EXIT_SUCCESS);
+}
+
+void print_table(const table& t) {
+	for(const auto& s : t)
+		std::cout << sequence_string(s) << std::endl;
+	std::cout << std::endl;
 }
 
 std::string sequence_string(const sequence& seq) {
 	std::stringstream ss;
 	for(char ch : seq) {
-		if(ch == ASCII::STX)
-			ss << "\33[1;33m^\33[0m";
-		else if(ch == ASCII::ETX)
+		if(ch == '\0')
 			ss << "\33[1;34m$\33[0m";
 		else
 			ss << ch;
