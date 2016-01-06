@@ -26,16 +26,72 @@ using sequence = std::list<alphabet>;
 using table = std::list<sequence>;
 using string = std::basic_string<alphabet>;
 
-void usage(const char *);
-std::string sequence_string(const sequence&);
-void print_table(const table&);
+template <typename T> T rotate(const T& x) {
+	T y;
+	if(not x.empty()) {
+		y.push_back(x.back());
+		y.insert(y.end(), x.begin(), std::prev(x.end()));
+	}
+	return y;
+}
+
+template <typename T> table zip(const T& x) {
+	table z;
+	T y = x;
+	for(size_t n = 0; n < x.size(); n++) {
+		z.push_back(sequence(y.begin(), y.end()));
+		y = rotate(y);
+	}
+	return z;
+}
+
+using sequence_method = const alphabet& (sequence::*)() const;
+
+string extract(const table& t, sequence_method f) {
+	string s;
+	for(const auto& x : t)
+		s.push_back((x.*f)());
+	return s;
+}
+
+void print_function(const string& X, const string& Y) {
+	std::cout << "dom: " << X << std::endl;
+	std::cout << "cod: " << Y << std::endl;
+	std::cout << std::endl;
+}
+
+void print_table(const table& t) {
+	for(const auto& s : t) {
+		for(auto ch : s)
+			std::cout << ch;
+		std::cout << std::endl;
+	}
+	std::cout << std::endl;
+}
+
+template <typename T> void step_transform(table& S, const T& Y) {
+
+	auto spos = S.begin();
+	auto ypos = Y.begin();
+
+	while(spos != S.end() and ypos != Y.end())
+		(spos++)->push_front(*ypos++);
+
+	S.sort();
+}
+
+void usage(const char *prog) {
+	std::cerr << std::endl;
+	std::cerr << "usage: " << prog << " message" << std::endl;
+	std::cerr << std::endl;
+}
 
 int main(int argc, char **argv) {
 
 	table F;
 	string X;
 	string Y;
-	sequence seq;
+	table S;
 
 	if(argc == 1) {
 		usage(argv[0]);
@@ -50,39 +106,23 @@ int main(int argc, char **argv) {
 	}
 
 	X.pop_back();
-	X.push_back('$');
+	X.push_back('\0');
 
-	seq.assign(X.begin(), X.end());
-	seq.push_front(seq.back());
-	seq.pop_back();
+	F = zip(X);
 
-	Y.assign(seq.begin(), seq.end());
+	F.sort();
 
-	std::cout << "dom: " << X << std::endl;
-	std::cout << "cod: " << Y << std::endl;
+	X = extract(F, &sequence::front);
+	Y = extract(F, &sequence::back);
+
+	print_function(X,Y);
+
+	S.assign(Y.size(), {});
+
+	while(S.front().size() < Y.size())
+		step_transform(S, Y);
+
+	print_table(S);
 
 	exit(EXIT_SUCCESS);
-}
-
-void print_table(const table& t) {
-	for(const auto& s : t)
-		std::cout << sequence_string(s) << std::endl;
-	std::cout << std::endl;
-}
-
-std::string sequence_string(const sequence& seq) {
-	std::stringstream ss;
-	for(char ch : seq) {
-		if(ch == '\0')
-			ss << "\33[1;34m$\33[0m";
-		else
-			ss << ch;
-	}
-	return ss.str();
-}
-
-void usage(const char *prog) {
-	std::cerr << std::endl;
-	std::cerr << "usage: " << prog << " message" << std::endl;
-	std::cerr << std::endl;
 }
