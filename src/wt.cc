@@ -35,13 +35,14 @@ template <typename T> T rotate(const T& x) {
 	return y;
 }
 
-template <typename T> table zip(const T& x) {
+template <typename T> table generate_transform(const T& x) {
 	table z;
 	T y = x;
 	for(size_t n = 0; n < x.size(); n++) {
 		z.push_back(sequence(y.begin(), y.end()));
 		y = rotate(y);
 	}
+	z.sort();
 	return z;
 }
 
@@ -108,9 +109,7 @@ int main(int argc, char **argv) {
 	X.pop_back();
 	X.push_back('\0');
 
-	F = zip(X);
-
-	F.sort();
+	F = generate_transform(X);
 
 	X = extract(F, &sequence::front);
 	Y = extract(F, &sequence::back);
