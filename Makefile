@@ -2,7 +2,7 @@ CXX = g++
 CPPFLAGS = -Isrc
 CXXFLAGS = -Wall -W -pedantic -std=gnu++1y -O2
 LIBFLAGS = -Llib -lpz
-TARGETS = lib/libpz.a bin/pzip bin/qzip bin/rzip bin/esl
+TARGETS = lib/libpz.a bin/pzip bin/qzip bin/rzip bin/esl bin/wt
 INSTALL_PATH = /usr/local
 
 .PHONY: all clean install test library
@@ -40,6 +40,10 @@ bin/qzip: src/qzip.o src/config.o
 bin/rzip: src/rzip.o src/config.o
 	if [ ! -d bin ]; then mkdir -vp bin; fi
 	$(CXX) $(CXXFLAGS) -o $@ $+
+
+bin/wt: src/wt.o
+	if [ ! -d bin ]; then mkdir -vp bin; fi
+	$(CXX) $(CXXFLAGS) -o $@ $<
 
 bin/esl: src/esl.o
 	if [ ! -d bin ]; then mkdir -vp bin; fi
